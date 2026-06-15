@@ -1,0 +1,39 @@
+##############################################
+# Sindbad-Dev per-user settings (example)
+#
+# Copy this file to:
+#   SindbadDevSettings.toml
+# and edit git_url values to point to your own forks.
+#
+# For each package you can set:
+#   git_url = "https://github.com/you/YourFork.jl.git"
+#
+# Paths are fixed to the standard workspace layout:
+#   Sindbad.jl/
+#   ErrorMetrics.jl/
+#   TimeSamplers.jl/
+#   OmniTools.jl/
+#   Sindbad.jl/SindbadTEM/
+# If those directories already exist, they are used as-is
+# and no cloning is performed.
+##############################################
+
+[Sindbad]
+# git_url = "https://github.com/your-user/Sindbad.jl.git"
+
+[ErrorMetrics]
+# git_url = "https://github.com/your-user/ErrorMetrics.jl.git"
+
+[TimeSamplers]
+# Note: default repo is LandEcosystems/TimeSamplers.jl and
+# the local directory name in this workspace is TimeSamplers.jl
+# git_url = "https://github.com/your-user/TimeSamplers.jl.git"
+
+[OmniTools]
+# git_url = "https://github.com/your-user/OmniTools.jl.git"
+
+[SindbadTEM]
+# By default this lives inside Sindbad.jl/SindbadTEM
+# You can point to a forked repo if you keep a separate checkout:
+# git_url = "https://github.com/your-user/SindbadTEM.jl.git"
+

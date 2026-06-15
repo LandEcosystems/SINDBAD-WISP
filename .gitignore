@@ -1,0 +1,16 @@
+########################################
+# Default: ignore everything
+########################################
+
+
+########################################
+# Explicitly keep these tracked files
+########################################
+!.gitignore
+dev/
+.dev/
+*.dev
+dev.*
+tmp*
+**/Manifest.toml
+
