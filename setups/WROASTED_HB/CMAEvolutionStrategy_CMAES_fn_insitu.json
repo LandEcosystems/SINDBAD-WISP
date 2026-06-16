@@ -1,0 +1,12 @@
+{
+  "method": "CMAES",
+  "options": {
+    "ftol":1e-6, 
+    "xtol":1e-6,
+    "maxfevals": 1500,
+    "popsize": 108,
+    "maxiter": 1500, 
+    "multi_threading": true,
+    "parallel_evaluation": true},
+  "package": "CMAEvolutionStrategy"
+}
