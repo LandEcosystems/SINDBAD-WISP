@@ -13,4 +13,7 @@ dev/
 dev.*
 tmp*
 **/Manifest.toml
-
+output*
+*output
+.DS_Store
+*.jld2
