@@ -1,4 +1,5 @@
 [deps]
+CMAEvolutionStrategy = "8d3b24bd-414e-49e0-94fb-163cc3a3e411"
 ErrorMetrics = "c324fbf6-076a-4da5-8ad2-21081a6b285c"
 OmniTools = "202e6067-a2be-48c9-bc21-3d3d20912f89"
 Sindbad = "36c3e672-7dee-4606-99b5-7e5d8d85a313"
