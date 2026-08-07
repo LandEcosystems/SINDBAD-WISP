@@ -1,5 +1,8 @@
 using Revise
+using Sindbad
+using Sindbad.Setup.Dates
 using CMAEvolutionStrategy
+include("./helpers.jl")
 toggle_type_abbrev_in_stacktrace()
 # site_index = Base.parse(Int, ENV["SLURM_ARRAY_TASK_ID"])
 
@@ -19,7 +22,7 @@ experiment_json = joinpath(@__DIR__, "setups/WROASTED_HB", "experiment_insitu.js
 experiment_name = "WROASTED_global_inversion_CMAES"
 begin_year = 1979
 end_year = 2017
-run_optimization = true
+run_optimization = false
 
 # experiment paths
 path_output = ""
@@ -39,12 +42,13 @@ replace_info = Dict("experiment.basics.time.date_begin" => "$(begin_year)-01-01"
 
     "experiment.model_output.path" => path_output,)
 
+@time out_opti = runExperimentForward(experiment_json; replace_info=replace_info, log_level=:info);
 
 @time out_opti = runExperimentOpti(experiment_json; replace_info=replace_info, log_level=:info);
 
-plotTimeSeriesWithObs(out_opti)
-plotPerformanceHistograms(out_opti)
-plotTimeSeriesDebug(out_opti.info, out_opti.output.optimized, out_opti.output.default)
+# plotTimeSeriesWithObs(out_opti)
+# plotPerformanceHistograms(out_opti)
+# plotTimeSeriesDebug(out_opti.info, out_opti.output.optimized, out_opti.output.default)
 
 ## in case inner objects are needed
 info = getExperimentInfo(experiment_json; replace_info=replace_info);

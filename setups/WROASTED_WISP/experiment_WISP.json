@@ -1,16 +1,15 @@
 {
   "basics": {
     "config_files": {
-      "forcing": "forcing.json",
-      "model_structure": "model_structure.json",
-      "optimization": "optimization.json"
+      "forcing": "forcing_WISP.json",
+      "model_structure": "model_structure_WISP.json"
     },
-    "domain": "FLUXNET",
-    "name": "HyK",
+    "domain": "WISP",
+    "name": "AU-WISP",
     "time": {
-      "date_begin": "1979-01-01",
-      "date_end": "2017-12-31",
-      "temporal_resolution": "day"
+      "date_begin": "2019-11-13T11:00:00",
+      "date_end": "2019-11-18T10:00:00",
+      "temporal_resolution": "hour"
     }
   },
   "exe_rules": {
@@ -23,13 +22,14 @@
     "yax_max_cache": 2e9
   },
   "flags": {
-    "calc_cost": true,
+    "calc_cost": false,
     "catch_model_errors": false,
     "debug_model": false,
     "filter_nan_pixels": false,
     "inline_update": false,
     "run_forward": true,
-    "run_optimization": true,
+    "run_optimization": false,
+    "run_lazy": true,
     "save_info": true,
     "spinup_TEM": true,
     "store_spinup": false
@@ -41,11 +41,11 @@
       "d_soil": "soilW",
       "d_tws": "TWS"
     },
-    "format": "zarr",
+    "format": "nc",
     "output_array_type": "array",
     "path": null,
     "plot_model_output": false,
-    "save_single_file": true,
+    "save_single_file": false,
     "variables": {
       "diagnostics.auto_respiration_f_airT": null,
       "diagnostics.k_shedding_leaf_frac": null,
