@@ -5,7 +5,7 @@ using Revise
 using Sindbad
 using Sindbad.Setup.Dates
 using Sindbad.Visualization
-
+using Plots
 toggle_type_abbrev_in_stacktrace()
 
 # ================================== get data / set paths ========================================= 
@@ -55,14 +55,14 @@ end
 # heatmap of a (lat, lon) map: rows (lat) map to y, columns (lon) map to x
 function plot_map(map_dat, title_str, fig_path)
     n_nan = sum(is_invalid_number.(map_dat))
-    plots_heatmap(map_dat;
+    heatmap(map_dat;
         title="$(title_str):: mean = $(round(nanmean(map_dat), digits=3)), nans=$(n_nan)",
         xlabel="lon (index)", ylabel="lat (index)", size=(1200, 1000))
-    plots_savefig(fig_path)
+    savefig(fig_path)
     return nothing
 end
 
-plots_default(titlefont=(20, "times"), legendfontsize=18, tickfont=(15, :blue))
+default(titlefont=(20, "times"), legendfontsize=18, tickfont=(15, :blue))
 
 # ---------------------------------- model output -------------------------------------------------
 # plotdat = out_opti.output.optimized;
