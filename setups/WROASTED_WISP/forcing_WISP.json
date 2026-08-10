@@ -7,7 +7,7 @@
   "default_forcing": {
     "additive_unit_conversion": false,
     "bounds": [],
-    "data_path": "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_hourly_rgpot.nc",
+    "data_path": "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_hourly_soil_pft_rgpot_test.nc",
     "depth_dimension": null,
     "is_categorical": false,
     "standard_name": null,
@@ -42,6 +42,7 @@
       "bounds": [0.0, 1.0],
       "standard_name": "vegetation cover fraction",
       "sindbad_unit": "-",
+      "source_to_sindbad_unit": 0.99,
       "source_unit": "fraction",
       "source_variable": "fcover"
     },
@@ -50,7 +51,8 @@
       "standard_name": "Photosynthetically active radiation (pre-derived in WISP file)",
       "sindbad_unit": "MJ m-2 h-1",
       "source_unit": "MJ m-2 h-1",
-      "source_variable": "f_PAR"
+      "source_to_sindbad_unit": 0.5,
+      "source_variable": "f_rg"
     },
     "f_rain": {
       "bounds": [0, 300],
@@ -74,7 +76,7 @@
       "source_variable": "f_rg_pot"
     },
     "f_rn": {
-      "bounds": [-100.0, 100.0],
+      "bounds": [0.0, 100.0],
       "standard_name": "Net radiation (pre-derived in WISP file from net shortwave + net longwave)",
       "sindbad_unit": "MJ m-2 h-1",
       "source_unit": "MJ m-2 h-1",
@@ -94,6 +96,14 @@
       "source_unit": "degC",
       "source_variable": "f_airT_day"
     },
+    "f_pft": {
+      "bounds": [1, 17],
+      "standard_name": "pft index",
+      "sindbad_unit": null,
+      "source_unit": null,
+      "source_variable": "f_pft",
+      "space_time_type": "spatial"
+    },
     "f_VPD": {
       "bounds": [0.01, 100.0],
       "standard_name": "Vapor pressure deficit",
@@ -107,6 +117,39 @@
       "sindbad_unit": "kPa",
       "source_unit": "kPa",
       "source_variable": "f_VPD_day"
+    },
+    "f_clay": {
+      "bounds": [0.0, 1.0],
+      "standard_name": "Clay content",
+      "sindbad_unit": "-",
+      "source_unit": "fraction",
+      "source_variable": "f_clay",
+      "space_time_type": "spatiovertical"
+    },
+    "f_sand": {
+      "bounds": [0.0, 1.0],
+      "standard_name": "Sand content",
+      "sindbad_unit": "-",
+      "source_unit": "fraction",
+      "source_variable": "f_sand",
+      "space_time_type": "spatiovertical"
+    },
+    "f_silt": {
+      "bounds": [0.0, 1.0],
+      "standard_name": "Silt content",
+      "sindbad_unit": "-",
+      "source_unit": "fraction",
+      "source_variable": "f_silt",
+      "space_time_type": "spatiovertical"
+    },
+    "f_orgm": {
+      "bounds": [0.0, 1.0],
+      "standard_name": "Organic matter content (Approximate: provisional SoilGrids SOC candidate, not yet validated/assigned in source file)",
+      "sindbad_unit": "-",
+      "source_unit": "g kg-1",
+      "source_to_sindbad_unit": 0.00,
+      "source_variable": "soilgrids_soc_candidate",
+      "space_time_type": "spatiovertical"
     }
   }
 }

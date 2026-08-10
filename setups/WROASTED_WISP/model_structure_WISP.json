@@ -44,7 +44,7 @@
       "approach": "GSI"
     },
     "cCycleBase": {
-      "approach": "GSI"
+      "approach": "GSI_PlantForm_LargeKReserve"
     },
     "cCycleConsistency": {
       "approach": "simple"
@@ -137,6 +137,9 @@
     "PET": {
       "approach": "Lu2005"
     },
+    "plantForm": {
+      "approach": "PFT"
+    },
     "rainSnow": {
       "approach": "Tair"
     },
@@ -174,7 +177,7 @@
       "approach": "Saxton2006"
     },
     "soilTexture": {
-      "approach": "constant"
+      "approach": "forcing"
     },
     "soilWBase": {
       "approach": "uniform"
