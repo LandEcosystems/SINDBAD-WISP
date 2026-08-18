@@ -7,7 +7,7 @@
   "default_forcing": {
     "additive_unit_conversion": false,
     "bounds": [],
-    "data_path": "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_hourly_soil_pft_rgpot_test.nc",
+    "data_path": "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_daily_soil_pft_rgpot_viirs_binary_wisp_firefrac.nc",
     "depth_dimension": null,
     "is_categorical": false,
     "standard_name": null,
@@ -27,9 +27,9 @@
       "bounds": [0, 50],
       "standard_name": "place holder for disturbance intensity",
       "sindbad_unit": "fraction",
-      "source_unit": "MJ m-2 h-1",
-      "source_to_sindbad_unit": 0.0,
-      "source_variable": "f_PAR"
+      "source_unit": "",
+      "source_to_sindbad_unit": 1,
+      "source_variable": "active_fire"
     },
     "f_tree_frac": {
       "bounds": [0.0, 1.0],

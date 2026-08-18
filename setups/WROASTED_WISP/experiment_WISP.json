@@ -108,23 +108,8 @@
     "sequence": [
       {
         "forcing": "all_years",
-        "n_repeat": 1,
+        "n_repeat": 1000,
         "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "day_MSC",
-        "n_repeat": 1,
-        "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "first_year",
-        "n_repeat": 200,
-        "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "first_year",
-        "n_repeat": 1,
-        "spinup_mode": "eta_scale_AH"
       }
     ]
   }

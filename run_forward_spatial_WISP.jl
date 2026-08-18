@@ -21,43 +21,56 @@ isfile(experiment_json) ? nothing : println("Hmmm... does not exist : $(experime
 # setting up the model spinup sequence : can change according to the site...
 # spinup_sequence = getSpinupSequenceSite(y_dist, begin_year);
 run_lazy = false
-domain = "AU-WISP"
-experiment_name     = "WISP_FORWARD_lazy_$(run_lazy)";
 
 # single-pixel debug subset: array positions into the forcing grid's lat/lon dims
 # (0-based grid is 128x128; pick the pixel to debug here)
 latidx = 64
 lonidx = 64
 
-# which time step to plot the maps for (change this to inspect other time steps)
-t_index = 5
-
 # default setting in experiment_json will be replaced by the "replace_info"
+
+temporal_resolution = "hourly"
+temporal_resolution = "daily"
+has_disturbance = false
+forc_src_var = "active_fire"
+forc_multiplier = 1.0
+forc_path = "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_$(temporal_resolution)_soil_pft_rgpot_viirs_binary_wisp_firefrac.nc"
+
+domain = "AU-WISP-$temporal_resolution-disturbance-$(has_disturbance)"
+experiment_name     = "WISP_$(domain)_FORWARD_lazy_$(run_lazy)";
+
 replace_info = Dict(
     "experiment.basics.name" => experiment_name,
     "experiment.flags.run_lazy" => run_lazy,
-    "experiment.flags.spinup_TEM" => false,
+    "experiment.flags.spinup_TEM" => true,
+    "forcing.default_forcing.data_path" => forc_path,
     # "experiment.model_spinup.sequence" => spinup_sequence,
     "experiment.model_output.path" => path_output,
     # "forcing.subset.lat" => [latidx],
     # "forcing.subset.lon" => [lonidx],
     );
 
-temporal_resolution = "hourly"
-temporal_resolution = "daily"
+if has_disturbance
+    forc_multiplier = 0.0
+else
+    forc_multiplier = 1.0
+end
+
+replace_info["forcing.variables.f_dist_intensity.source_to_sindbad_unit"] = forc_multiplier
+
 if temporal_resolution == "hourly"
     replace_info["experiment.basics.time.temporal_resolution"] = "hour"
     replace_info["experiment.basics.time.date_begin"] = "2019-11-13T11:00:00"
     replace_info["experiment.basics.time.date_end"] = "2019-11-18T10:00:00"
-    replace_info["forcing.default_forcing.data_path"] = "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_hourly_soil_pft_rgpot_test.nc"
 elseif temporal_resolution == "daily"
     replace_info["experiment.basics.time.temporal_resolution"] = "day"
     replace_info["experiment.basics.time.date_begin"] = "2019-11-13"
     replace_info["experiment.basics.time.date_end"] = "2019-11-18"
-    replace_info["forcing.default_forcing.data_path"] = "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_daily_soil_pft_rgpot_test.nc"
 else
     error("temporal_resolution must be either 'hourly' or 'daily'")
 end
+
+out_forward = runExperimentForward(experiment_json; replace_info=replace_info); 
 info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
 forcing         = getForcing(info); 
 run_helpers     = prepTEM(forcing, info); 
@@ -72,11 +85,19 @@ run_helpers     = prepTEM(forcing, info);
 using Sindbad.NaNStatistics: nanmean
 
 # (leading_dim, lat, lon) -> (lat, lon), taking a single index along the leading dim
-# used for a time step of a spatiotemporal variable, or a layer of a spatiovertical one
+# used for a layer of a spatiovertical variable
 function leading_dim_map(dat, index)
     arr = Array(dat)
     ndims(arr) == 3 || error("expected (leading_dim, lat, lon), got size $(size(arr))")
     return dropdims(arr[index:index, :, :]; dims=1)
+end
+
+# (time, lat, lon) -> (lat, lon), nan-aware mean over the leading (time) dim
+# used for a spatiotemporal variable, in place of a single time-step snapshot
+function time_mean_map(dat)
+    arr = Array(dat)
+    ndims(arr) == 3 || error("expected (time, lat, lon), got size $(size(arr))")
+    return dropdims(nanmean(arr; dims=1); dims=1)
 end
 
 # heatmap of a (lat, lon) map: rows (lat) map to y, columns (lon) map to x
@@ -105,7 +126,7 @@ for i ∈ eachindex(output_vars)
         # layered variables (soilW, cEco, ...) get one map per layer
         v_suffix = n_layer == 1 ? "" : "_$(ll)"
         println("plot output-model => domain: $domain, variable: $(vname)$(v_suffix)")
-        plot_map(leading_dim_map(view(pd, :, ll, :, :), t_index), "$(vname)$(v_suffix)",
+        plot_map(time_mean_map(view(pd, :, ll, :, :)), "$(vname)$(v_suffix)",
             joinpath(info.output.dirs.figure, "$(domain)_$(vname)$(v_suffix).png"))
     end
 end
@@ -125,7 +146,7 @@ for (o, v) in enumerate(forc_vars)
             joinpath(info.output.dirs.figure, "forc_$(domain)_$(v).png"))
     elseif extra_dim == (:time,)
         println("plot forc-model => domain: $domain, variable: $v")
-        plot_map(leading_dim_map(def_var, t_index), "$(v)",
+        plot_map(time_mean_map(def_var), "$(v)",
             joinpath(info.output.dirs.figure, "forc_$(domain)_$(v).png"))
     else
         n_layer = size(def_var, 1)
