@@ -21,21 +21,60 @@ isfile(experiment_json) ? nothing : println("Hmmm... does not exist : $(experime
 # setting up the model spinup sequence : can change according to the site...
 # spinup_sequence = getSpinupSequenceSite(y_dist, begin_year);
 run_lazy = false
-domain = "AU-WISP"
-experiment_name     = "WISP_FORWARD_lazy_$(run_lazy)";
+
+# single-pixel debug subset: array positions into the forcing grid's lat/lon dims
+# (0-based grid is 128x128; pick the pixel to debug here)
+latidx = 64
+lonidx = 64
+
 # default setting in experiment_json will be replaced by the "replace_info"
+
+temporal_resolution = "hourly"
+temporal_resolution = "daily"
+has_disturbance = false
+forc_src_var = "active_fire"
+forc_multiplier = 1.0
+forc_path = "WISP/AUST-1_2019-11-06_2019-11-20_-32.0_-29.0_150.0_153.0_daily_grid_ent00_physical_$(temporal_resolution)_soil_pft_rgpot_viirs_binary_wisp_firefrac.nc"
+
+domain = "AU-WISP-$temporal_resolution-disturbance-$(has_disturbance)"
+experiment_name     = "WISP_$(domain)_FORWARD_lazy_$(run_lazy)";
+
 replace_info = Dict(
     "experiment.basics.name" => experiment_name,
     "experiment.flags.run_lazy" => run_lazy,
-    "experiment.flags.spinup_TEM" => false,
+    "experiment.flags.spinup_TEM" => true,
+    "forcing.default_forcing.data_path" => forc_path,
     # "experiment.model_spinup.sequence" => spinup_sequence,
     "experiment.model_output.path" => path_output,
+    # "forcing.subset.lat" => [latidx],
+    # "forcing.subset.lon" => [lonidx],
     );
 
+if has_disturbance
+    forc_multiplier = 0.0
+else
+    forc_multiplier = 1.0
+end
+
+replace_info["forcing.variables.f_dist_intensity.source_to_sindbad_unit"] = forc_multiplier
+
+if temporal_resolution == "hourly"
+    replace_info["experiment.basics.time.temporal_resolution"] = "hour"
+    replace_info["experiment.basics.time.date_begin"] = "2019-11-13T11:00:00"
+    replace_info["experiment.basics.time.date_end"] = "2019-11-18T10:00:00"
+elseif temporal_resolution == "daily"
+    replace_info["experiment.basics.time.temporal_resolution"] = "day"
+    replace_info["experiment.basics.time.date_begin"] = "2019-11-13"
+    replace_info["experiment.basics.time.date_end"] = "2019-11-18"
+else
+    error("temporal_resolution must be either 'hourly' or 'daily'")
+end
+
+out_forward = runExperimentForward(experiment_json; replace_info=replace_info); 
 info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
 forcing         = getForcing(info); 
 run_helpers     = prepTEM(forcing, info); 
-@time runTEM!(info.models.forward, run_helpers.space_forcing, run_helpers.space_spinup_forcing, run_helpers.loc_forcing_t, run_helpers.space_output, run_helpers.space_land, run_helpers.tem_info)
+@time runTEM!(info.models.forward, run_helpers.space_forcing, run_helpers.space_spinup, run_helpers.loc_forcing_t, run_helpers.space_output, run_helpers.space_land, run_helpers.tem_info)
 
 # ================================== plots ========================================================
 # this is a gridded run, so the arrays carry explicit lat/lon dimensions:
@@ -45,7 +84,16 @@ run_helpers     = prepTEM(forcing, info);
 # nan-aware so that non-land pixels do not wipe out the whole map.
 using Sindbad.NaNStatistics: nanmean
 
-# (time, lat, lon) -> (lat, lon), collapsing the time axis
+# (leading_dim, lat, lon) -> (lat, lon), taking a single index along the leading dim
+# used for a layer of a spatiovertical variable
+function leading_dim_map(dat, index)
+    arr = Array(dat)
+    ndims(arr) == 3 || error("expected (leading_dim, lat, lon), got size $(size(arr))")
+    return dropdims(arr[index:index, :, :]; dims=1)
+end
+
+# (time, lat, lon) -> (lat, lon), nan-aware mean over the leading (time) dim
+# used for a spatiotemporal variable, in place of a single time-step snapshot
 function time_mean_map(dat)
     arr = Array(dat)
     ndims(arr) == 3 || error("expected (time, lat, lon), got size $(size(arr))")
@@ -84,21 +132,40 @@ for i ∈ eachindex(output_vars)
 end
 
 # ---------------------------------- forcing ------------------------------------------------------
+# forcing variables do not all share the same shape: spatiotemporal ones are (time, lat, lon),
+# spatiovertical ones (soil texture, ...) are (soil_depth, lat, lon), and purely spatial ones
+# (f_pft, ...) are just (lat, lon). forcing.dims[o] already carries this per-variable, since it
+# is exactly the leading, non-space dims computed at load time.
 forc_vars = forcing.variables
 for (o, v) in enumerate(forc_vars)
-    println("plot forc-model => domain: $domain, variable: $v")
     def_var = forcing.data[o]
-    plot_map(time_mean_map(def_var), "$(v)",
-        joinpath(info.output.dirs.figure, "forc_$(domain)_$(v).png"))
+    extra_dim = forcing.dims[o]
+    if isempty(extra_dim)
+        println("plot forc-model => domain: $domain, variable: $v")
+        plot_map(Array(def_var), "$(v)",
+            joinpath(info.output.dirs.figure, "forc_$(domain)_$(v).png"))
+    elseif extra_dim == (:time,)
+        println("plot forc-model => domain: $domain, variable: $v")
+        plot_map(time_mean_map(def_var), "$(v)",
+            joinpath(info.output.dirs.figure, "forc_$(domain)_$(v).png"))
+    else
+        n_layer = size(def_var, 1)
+        for ll ∈ 1:n_layer
+            v_suffix = n_layer == 1 ? "" : "_$(ll)"
+            println("plot forc-model => domain: $domain, variable: $(v)$(v_suffix)")
+            plot_map(leading_dim_map(def_var, ll), "$(v)$(v_suffix)",
+                joinpath(info.output.dirs.figure, "forc_$(domain)_$(v)$(v_suffix).png"))
+        end
+    end
 end
 # @time outdataset = runTEMYax(info.models.forward, forcing, info)
 
 # ================================== forward run ================================================== 
 # before running the optimization, check a forward run 
-@time out_dflt  = runExperimentForward(experiment_json; replace_info=deepcopy(replace_info)); # full default model
+# @time out_dflt  = runExperimentForward(experiment_json; replace_info=deepcopy(replace_info)); # full default model
 
-# access some of the internals to do some plots with the forward runs...
-info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
-forcing         = getForcing(info); 
-run_helpers     = prepTEM(forcing, info); # not needed now
+# # access some of the internals to do some plots with the forward runs...
+# info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
+# forcing         = getForcing(info); 
+# run_helpers     = prepTEM(forcing, info); # not needed now
 
