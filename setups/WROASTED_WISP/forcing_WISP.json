@@ -23,12 +23,19 @@
     "source_variable": null
   },
   "variables": {
+    "f_burnt_area": {
+      "bounds": [0, 1],
+      "standard_name": "burnt_area_fraction",
+      "sindbad_unit": "fraction",
+      "source_to_sindbad_unit": 0.99,
+      "source_variable": "f_burnt_area"
+    },
     "f_dist_intensity": {
-      "bounds": [0, 50],
+      "bounds": [0, 1],
       "standard_name": "place holder for disturbance intensity",
       "sindbad_unit": "fraction",
       "source_unit": "",
-      "source_to_sindbad_unit": 1,
+      "source_to_sindbad_unit": 0.99,
       "source_variable": "active_fire"
     },
     "f_tree_frac": {
