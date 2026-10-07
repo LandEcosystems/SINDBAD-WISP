@@ -104,14 +104,11 @@
       "diagnostics.WUE": null
     }
   },
-  "model_spinup": {
-    "restart_file": null,
-    "sequence": [
+  "spinup_sequence": [
       {
         "forcing": "all_years",
         "n_repeat": 1000,
         "spinup_mode": "all_forward_models"
       }
     ]
-  }
 }

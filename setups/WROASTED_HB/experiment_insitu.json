@@ -103,9 +103,7 @@
       "diagnostics.WUE": null
     }
   },
-  "model_spinup": {
-    "restart_file": null,
-    "sequence": [
+  "spinup_sequence": [
       {
         "forcing": "all_years",
         "n_repeat": 1,
@@ -127,5 +125,4 @@
         "spinup_mode": "eta_scale_AH"
       }
     ]
-  }
 }
