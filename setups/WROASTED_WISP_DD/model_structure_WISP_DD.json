@@ -47,19 +47,40 @@
       "approach": "GSI"
     },
     "cCycleConsistency": {
-      "approach": "simple"
+      "approach": "simple",
+      "use_in_spinup": false
+    },
+    "cCycleDisturbance": {
+      "approach": "simple",
+      "use_in_spinup": false
+    },
+    "cFire": {
+      "approach": "simple",
+      "use_in_spinup": false
+    },
+    "cFireBurnedArea": {
+      "approach": "forcing",
+      "use_in_spinup": false
+    },
+    "cFireCombustionCompleteness": {
+      "approach": "vanDerWerf2006",
+      "use_in_spinup": false
+    },
+    "cFireMortality": {
+      "approach": "vanDerWerf2004",
+      "use_in_spinup": false
     },
     "cFlow": {
       "approach": "GSI"
     },
     "cFlowLitterfall": {
-      "approach": "GSI_TimeScale"
+      "approach": "GSI"
     },
     "cFlowReserves": {
-      "approach": "GSI_TimeScale"
+      "approach": "GSI"
     },
     "cFlowStress": {
-      "approach": "GSI_TimeScale"
+      "approach": "GSI"
     },
     "cMicrobialEfficiency": {
       "approach": "sum"

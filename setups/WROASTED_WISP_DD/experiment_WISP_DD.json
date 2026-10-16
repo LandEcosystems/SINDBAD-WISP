@@ -14,7 +14,7 @@
   },
   "exe_rules": {
     "land_output_type": "array",
-    "longtuple_size": null,
+    "longtuple_size": 28,
     "model_array_type": "static_array",
     "model_number_type": "Float32",
     "parallelization": "threads",
@@ -36,6 +36,10 @@
     "store_spinup": false
   },
   "model_output": {
+    "data_compression": {
+      "digits": 4,
+      "level": 4
+    },
     "depth_dimensions": {
       "d_cEco": 8,
       "d_snow": "snowW",
@@ -104,11 +108,8 @@
       "diagnostics.WUE": null
     }
   },
-  "spinup_sequence": [
-      {
-        "forcing": "all_years",
-        "n_repeat": 1,
-        "spinup_mode": "all_forward_models"
-      }
-    ]
+  "spinup_sequence": {
+    "method": "sequence_with_age"
+  }
+  
 }

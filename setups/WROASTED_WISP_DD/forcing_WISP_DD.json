@@ -7,7 +7,7 @@
   "default_forcing": {
     "additive_unit_conversion": false,
     "bounds": [],
-    "data_path": "WISP/daily_master_dev_v4.nc",
+    "data_path": "WISP/daily_master_dev_v5.nc",
     "depth_dimension": null,
     "is_categorical": false,
     "standard_name": null,
@@ -36,25 +36,34 @@
     },
     "f_burnt_area": {
       "bounds": [0, 1],
-      "standard_name": "burnt_area_fraction",
+      "standard_name": "burnt_area_fraction (Approximate: VIIRS active-fire detection flag scaled to 0.99 burnt fraction on detection days)",
       "sindbad_unit": "fraction",
-      "source_to_sindbad_unit": 0.0,
-      "source_variable": "fapar"
+      "source_unit": "1",
+      "source_to_sindbad_unit": 0.99,
+      "source_variable": "viirs_fire_binary"
     },
     "f_dist_intensity": {
       "bounds": [0, 1],
-      "standard_name": "place holder for disturbance intensity",
+      "standard_name": "disturbance intensity (explicit zero-disturbance assumption)",
       "sindbad_unit": "fraction",
-      "source_unit": "",
-      "source_to_sindbad_unit": 0.0,
-      "source_variable": "fapar"
+      "source_unit": "fraction",
+      "source_variable": "f_dist_intensity_assumed_zero",
+      "space_time_type": "spatial"
+    },
+    "f_dist_year": {
+      "bounds": [0.0, 10000],
+      "standard_name": "disturbance_year",
+      "sindbad_unit": "-",
+      "source_product": "Besnard2018",
+      "source_variable": "disturbance_year_2010",
+      "space_time_type": "spatial"
     },
     "f_tree_frac": {
       "bounds": [0.0, 1.0],
-      "standard_name": "vegetation cover fraction (Approximate: fcover proxy, trees not separable from other vegetation)",
+      "standard_name": "tree cover fraction",
       "sindbad_unit": "-",
       "source_unit": "1",
-      "source_variable": "fcover"
+      "source_variable": "f_tree_frac"
     },
     "f_frac_vegetation": {
       "bounds": [0.0, 1.0],
@@ -62,15 +71,14 @@
       "sindbad_unit": "-",
       "source_to_sindbad_unit": 0.99,
       "source_unit": "fraction",
-      "source_variable": "fcover"
+      "source_variable": "f_frac_vegetation"
     },
     "f_PAR": {
       "bounds": [0, 50],
       "standard_name": "Photosynthetically active radiation (pre-derived in WISP file)",
       "sindbad_unit": "MJ m-2 h-1",
       "source_unit": "MJ m-2 h-1",
-      "source_to_sindbad_unit": 0.5,
-      "source_variable": "f_rg"
+      "source_variable": "f_PAR"
     },
     "f_rain": {
       "bounds": [0, 300],
@@ -121,13 +129,6 @@
       "source_unit": null,
       "source_variable": "f_pft",
       "space_time_type": "spatial"
-    },
-    "f_VPD": {
-      "bounds": [0.01, 100.0],
-      "standard_name": "Vapor pressure deficit",
-      "sindbad_unit": "kPa",
-      "source_unit": "kPa",
-      "source_variable": "f_VPD"
     },
     "f_VPD_day": {
       "bounds": [0.01, 100.0],

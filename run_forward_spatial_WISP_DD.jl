@@ -10,6 +10,11 @@ toggle_type_abbrev_in_stacktrace()
 
 # ================================== get data / set paths ========================================= 
 path_output         = "./";
+# forcing file for this run, which replaces `default_forcing.data_path` of the forcing
+# json. A relative path is taken from this script's directory.
+path_forcing        = "../data/WISP/daily_master_dev_v5.nc";
+path_forcing        = abspath(joinpath(@__DIR__, path_forcing));
+isfile(path_forcing) ? nothing : println("oops... forcing does not exist : $(path_forcing)");
 
 # ================================== selecting a site =============================================
 
@@ -44,6 +49,7 @@ replace_info = Dict(
     "experiment.flags.spinup_TEM" => true,
     # "experiment.model_spinup.sequence" => spinup_sequence,
     "experiment.model_output.path" => path_output,
+    "forcing.default_forcing.data_path" => path_forcing,
     # "forcing.subset.lat" => [latidx],
     # "forcing.subset.lon" => [lonidx],
     );
@@ -54,14 +60,14 @@ else
     forc_multiplier = 1.0
 end
 
-replace_info["forcing.variables.f_dist_intensity.source_to_sindbad_unit"] = forc_multiplier
+# replace_info["forcing.variables.f_dist_intensity.source_to_sindbad_unit"] = forc_multiplier
 
 
 # out_forward = runExperimentForward(experiment_json; replace_info=replace_info); 
 info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
 forcing         = getForcing(info); 
 run_helpers     = prepTEM(forcing, info); 
-@time runTEM!(info.models.forward, run_helpers.space_forcing, run_helpers.space_spinup, run_helpers.loc_forcing_t, run_helpers.space_output, run_helpers.space_land, run_helpers.tem_info)
+@time runTEM!(run_helpers.space_selected_models, run_helpers.space_forcing, run_helpers.space_spinup, run_helpers.loc_forcing_t, run_helpers.space_output, run_helpers.space_land, run_helpers.tem_info; show_progress=true)
 
 # ================================== plots ========================================================
 # this is a gridded run, so the arrays carry explicit lat/lon dimensions:
@@ -97,6 +103,36 @@ function plot_map(map_dat, title_str, fig_path)
     return nothing
 end
 
+# (time, lat, lon) -> (time,), nan-aware mean over all pixels at each time step
+function space_mean_series(dat)
+    arr = Array(dat)
+    ndims(arr) == 3 || error("expected (time, lat, lon), got size $(size(arr))")
+    return vec(nanmean(arr; dims=(2, 3)))
+end
+
+# nan-aware mean of a daily series within each period. period_of maps a date to its
+# period key, so (year, month) gives monthly and year gives annual values. each period
+# is placed at its first date.
+function period_mean_series(series, dates, period_of)
+    period_keys = period_of.(dates)
+    periods = unique(period_keys)
+    p_dates = [dates[findfirst(==(p), period_keys)] for p ∈ periods]
+    p_vals = [nanmean(series[period_keys .== Ref(p)]) for p ∈ periods]
+    return p_dates, p_vals
+end
+
+# daily, monthly and annual time series of one variable in three stacked subplots
+function plot_time_series(series, dates, title_str, fig_path)
+    m_dates, m_vals = period_mean_series(series, dates, d -> (year(d), month(d)))
+    y_dates, y_vals = period_mean_series(series, dates, year)
+    p_d = plot(dates, series; title="$(title_str):: daily", label=nothing)
+    p_m = plot(m_dates, m_vals; title="monthly mean", marker=:circle, label=nothing)
+    p_y = plot(y_dates, y_vals; title="annual mean", marker=:circle, label=nothing)
+    plot(p_d, p_m, p_y; layout=(3, 1), size=(1400, 1500), left_margin=10Plots.mm)
+    savefig(fig_path)
+    return nothing
+end
+
 default(titlefont=(20, "times"), legendfontsize=18, tickfont=(15, :blue))
 
 # ---------------------------------- model output -------------------------------------------------
@@ -115,6 +151,26 @@ for i ∈ eachindex(output_vars)
         println("plot output-model => domain: $domain, variable: $(vname)$(v_suffix)")
         plot_map(time_mean_map(view(pd, :, ll, :, :)), "$(vname)$(v_suffix)",
             joinpath(info.output.dirs.figure, "$(domain)_$(vname)$(v_suffix).png"))
+    end
+end
+
+# ---------------------------------- model output time series -------------------------------------
+# each variable is averaged over all pixels at every time step, then shown at daily,
+# monthly and annual scales. the dates come from the experiment time range.
+model_dates = Date.(collect(info.helpers.dates.range))
+for i ∈ eachindex(output_vars)
+    (v_group, v_sub) = output_vars[i]
+    vname = "$(v_group)_$(v_sub)"
+    pd = plotdat[i]
+    size(pd, 1) == length(model_dates) ||
+        error("$(vname) has $(size(pd, 1)) time steps but there are $(length(model_dates)) dates")
+    n_layer = size(pd, 2)
+    for ll ∈ 1:n_layer
+        v_suffix = n_layer == 1 ? "" : "_$(ll)"
+        println("plot output-model time series => domain: $domain, variable: $(vname)$(v_suffix)")
+        plot_time_series(space_mean_series(view(pd, :, ll, :, :)), model_dates,
+            "$(vname)$(v_suffix)",
+            joinpath(info.output.dirs.figure, "$(domain)_$(vname)$(v_suffix)_timeseries.png"))
     end
 end
 
@@ -158,7 +214,7 @@ end
 
 # ================================== forward run ================================================== 
 # before running the optimization, check a forward run 
-# @time out_dflt  = runExperimentForward(experiment_json; replace_info=deepcopy(replace_info)); # full default model
+@time out_dflt  = runExperimentForward(experiment_json; replace_info=deepcopy(replace_info)); # full default model
 
 # # access some of the internals to do some plots with the forward runs...
 # info            = getExperimentInfo(experiment_json; replace_info=deepcopy(replace_info)); # note that this will modify information from json with the replace_info
