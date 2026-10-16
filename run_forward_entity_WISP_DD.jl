@@ -23,6 +23,10 @@ make_plots          = true;
 # `forcing_file_name`, e.g., daily_master_dev_v5_MED_PT_01.nc for the site MED_PT_01
 path_sites          = "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/wisp_eos_q10_med10_v1/outputs/base_v5";
 forcing_file_name(site) = "daily_master_dev_v5_$(site).nc";
+# period of the entity forcing files, which replaces the dates of the experiment json. The
+# files start on 2014-01-12 and have their daily time stamps at 00:00.
+date_begin          = "2014-01-12T00:00:00";
+date_end            = "2023-12-31T00:00:00";
 
 # ================================== selecting sites ==============================================
 # all site folders by default. give a list of names instead to run only some of them, e.g.,
@@ -80,6 +84,8 @@ for (site_index, site) ∈ enumerate(sites)
         "experiment.flags.spinup_TEM" => true,
         "experiment.model_output.path" => site_output,
         "forcing.default_forcing.data_path" => path_forcing,
+        "experiment.basics.time.date_begin" => date_begin,
+        "experiment.basics.time.date_end" => date_end,
         )
     out = try
         @time runExperimentForward(experiment_json; replace_info=deepcopy(replace_info))
