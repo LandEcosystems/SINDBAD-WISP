@@ -76,36 +76,36 @@
     "f_PAR": {
       "bounds": [0, 50],
       "standard_name": "Photosynthetically active radiation (pre-derived in WISP file)",
-      "sindbad_unit": "MJ m-2 h-1",
-      "source_unit": "MJ m-2 h-1",
+      "sindbad_unit": "MJ m-2 d-1",
+      "source_unit": "MJ m-2 d-1",
       "source_variable": "f_PAR"
     },
     "f_rain": {
       "bounds": [0, 300],
       "standard_name": "Rain",
-      "sindbad_unit": "mm h-1",
-      "source_unit": "mm h-1",
+      "sindbad_unit": "mm d-1",
+      "source_unit": "mm d-1",
       "source_variable": "f_rain"
     },
     "f_rg": {
       "bounds": [0.0, 100.0],
       "standard_name": "Global Radiation",
-      "sindbad_unit": "MJ m-2 h-1",
-      "source_unit": "MJ m-2 h-1",
+      "sindbad_unit": "MJ m-2 d-1",
+      "source_unit": "MJ m-2 d-1",
       "source_variable": "f_rg"
     },
     "f_rg_pot": {
       "bounds": [0.0, 100.0],
       "standard_name": "Potential Global Radiation (Approximate: extraterrestrial radiation computed from solar geometry, ONEFlux SW_IN_POT convention)",
-      "sindbad_unit": "MJ m-2 h-1",
-      "source_unit": "MJ m-2 h-1",
+      "sindbad_unit": "MJ m-2 d-1",
+      "source_unit": "MJ m-2 d-1",
       "source_variable": "f_rg_pot"
     },
     "f_rn": {
       "bounds": [0.0, 100.0],
       "standard_name": "Net radiation (pre-derived in WISP file from net shortwave + net longwave)",
-      "sindbad_unit": "MJ m-2 h-1",
-      "source_unit": "MJ m-2 h-1",
+      "sindbad_unit": "MJ m-2 d-1",
+      "source_unit": "MJ m-2 d-1",
       "source_variable": "f_rn"
     },
     "f_airT": {
