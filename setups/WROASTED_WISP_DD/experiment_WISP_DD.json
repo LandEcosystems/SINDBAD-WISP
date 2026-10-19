@@ -1,51 +1,56 @@
 {
   "basics": {
     "config_files": {
-      "forcing": "forcing.json",
-      "model_structure": "model_structure.json",
-      "optimization": "optimization.json"
+      "forcing": "forcing_WISP_DD.json",
+      "model_structure": "model_structure_WISP_DD.json"
     },
-    "domain": "FLUXNET",
-    "name": "HyK",
+    "domain": "WISP",
+    "name": "AU-WISP",
     "time": {
-      "date_begin": "1979-01-01",
-      "date_end": "2017-12-31",
+      "date_begin": "2014-01-01T11:00:00",
+      "date_end": "2023-12-31T11:00:00",
       "temporal_resolution": "day"
     }
   },
   "exe_rules": {
     "land_output_type": "array",
-    "longtuple_size": null,
+    "longtuple_size": 28,
     "model_array_type": "static_array",
     "model_number_type": "Float32",
     "parallelization": "threads",
     "tolerance": 1.0e-2,
+    "visualization_backend": "Plots",
     "yax_max_cache": 2e9
   },
   "flags": {
-    "calc_cost": true,
-    "catch_model_errors": false,
+    "calc_cost": false,
+    "catch_model_errors": true,
     "debug_model": false,
     "filter_nan_pixels": false,
     "inline_update": false,
     "run_forward": true,
-    "run_optimization": true,
+    "run_optimization": false,
+    "run_lazy": true,
     "save_info": true,
     "spinup_TEM": true,
     "store_spinup": false
   },
   "model_output": {
+    "data_compression": {
+      "digits": 4,
+      "level": 4
+    },
     "depth_dimensions": {
       "d_cEco": 8,
       "d_snow": "snowW",
       "d_soil": "soilW",
       "d_tws": "TWS"
     },
-    "format": "zarr",
+    "format": "nc",
     "output_array_type": "array",
     "path": null,
-    "plot_model_output": false,
-    "save_single_file": true,
+    "plot_resolution": 100,
+    "save_single_file": false,
     "variables": {
       "diagnostics.auto_respiration_f_airT": null,
       "diagnostics.k_shedding_leaf_frac": null,
@@ -91,7 +96,7 @@
       "diagnostics.c_eco_k": "d_cEco",
       "fluxes.c_eco_out": "d_cEco",
       "fluxes.eco_respiration": null,
-      "diagnostics.c_flow_A_vec": 10,
+      "diagnostics.c_flow_A_vec": 11,
       "states.aboveground_biomass": null,
       "states.fAPAR": null,
       "states.fAPAR_bare": null,
@@ -103,29 +108,8 @@
       "diagnostics.WUE": null
     }
   },
-  "model_spinup": {
-    "restart_file": null,
-    "sequence": [
-      {
-        "forcing": "all_years",
-        "n_repeat": 1,
-        "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "day_MSC",
-        "n_repeat": 1,
-        "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "first_year",
-        "n_repeat": 200,
-        "spinup_mode": "all_forward_models"
-      },
-      {
-        "forcing": "first_year",
-        "n_repeat": 1,
-        "spinup_mode": "eta_scale_AH"
-      }
-    ]
+  "spinup_sequence": {
+    "method": "sequence_with_age"
   }
+  
 }
