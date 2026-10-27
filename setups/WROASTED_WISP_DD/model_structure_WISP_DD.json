@@ -23,7 +23,7 @@
       "approach": "none"
     },
     "cAllocationRadiation": {
-      "approach": "RgPot"
+      "approach": "gpp"
     },
     "cAllocationSoilT": {
       "approach": "gpp"
@@ -38,39 +38,82 @@
       "approach": "VanDijk2010"
     },
     "cBiomass": {
-      "approach": "treeGrass_cVegReserveScaling"
+      "approach": "vegType"
     },
     "cCycle": {
-      "approach": "GSI"
-    },
-    "cCycleBase": {
-      "approach": "GSI_PlantForm_LargeKReserve"
-    },
-    "cCycleConsistency": {
       "approach": "simple"
     },
-    "cVegetationDieOff": {
-      "approach": "forcing",
+    "cCycleBase": {
+      "approach": "GSI"
+    },
+    "cCycleConsistency": {
+      "approach": "simple",
       "use_in_spinup": false
     },
     "cCycleDisturbance": {
-      "approach": "WROASTED",
+      "approach": "simple",
+      "use_in_spinup": false
+    },
+    "cFire": {
+      "approach": "simple",
+      "use_in_spinup": false
+    },
+    "cFireBurnedArea": {
+      "approach": "forcing",
+      "use_in_spinup": false
+    },
+    "cFireCombustionCompleteness": {
+      "approach": "vanDerWerf2006",
+      "use_in_spinup": false
+    },
+    "cFireMortality": {
+      "approach": "vanDerWerf2004",
       "use_in_spinup": false
     },
     "cFlow": {
       "approach": "GSI"
     },
-    "cFlowSoilProperties": {
-      "approach": "none"
+    "cFlowLitterfall": {
+      "approach": "GSI"
     },
-    "cFlowVegProperties": {
-      "approach": "none"
+    "cFlowReserves": {
+      "approach": "GSI"
+    },
+    "cFlowStress": {
+      "approach": "GSI"
+    },
+    "cMicrobialEfficiency": {
+      "approach": "sum"
+    },
+    "cMicrobialEfficiencycLit": {
+      "approach": "texture"
+    },
+    "cMicrobialEfficiencycMic": {
+      "approach": "texture"
+    },
+    "cMicrobialEfficiencycSoil": {
+      "approach": "texture"
+    },
+    "constants": {
+      "approach": "numbers"
+    },
+    "cQualityPartition": {
+      "approach": "mult"
+    },
+    "cQualityPartitioncLit": {
+      "approach": "vegQualityTraits"
+    },
+    "cQualityPartitioncMic": {
+      "approach": "texture"
+    },
+    "cQualityPartitioncSoil": {
+      "approach": "texture"
+    },
+    "cQualityPartitioncVeg": {
+      "approach": "vegQualityTraits"
     },
     "cTau": {
       "approach": "mult"
-    },
-    "cTauLAI": {
-      "approach": "none"
     },
     "cTauSoilProperties": {
       "approach": "none"
@@ -84,6 +127,10 @@
     "cTauVegProperties": {
       "approach": "none"
     },
+    "cVegetationDieOff": {
+      "approach": "none",
+      "use_in_spinup": false
+    },
     "drainage": {
       "approach": "dos"
     },
@@ -93,11 +140,8 @@
     "evapotranspiration": {
       "approach": "sum"
     },
-    "vegFraction": {
-      "approach": "forcing"
-    },
     "fAPAR": {
-      "approach": "cVegLeafBareFrac"
+      "approach": "LAIBareFrac"
     },
     "getPools": {
       "approach": "simple"
@@ -106,22 +150,22 @@
       "approach": "coupled"
     },
     "gppAirT": {
-      "approach": "CASA"
+      "approach": "De2025"
     },
     "gppDemand": {
       "approach": "mult"
     },
     "gppDiffRadiation": {
-      "approach": "Wang2015"
+      "approach": "exp"
     },
     "gppDirRadiation": {
-      "approach": "none"
+      "approach": "Maekelae2008"
     },
     "gppPotential": {
       "approach": "Monteith"
     },
     "gppSoilW": {
-      "approach": "Stocker2020"
+      "approach": "Horn"
     },
     "gppVPD": {
       "approach": "PRELES"
@@ -140,9 +184,6 @@
     },
     "PET": {
       "approach": "Lu2005"
-    },
-    "plantForm": {
-      "approach": "PFT"
     },
     "rainSnow": {
       "approach": "Tair"
@@ -184,7 +225,7 @@
       "approach": "forcing"
     },
     "soilWBase": {
-      "approach": "uniform"
+      "approach": "soilDepth"
     },
     "transpiration": {
       "approach": "coupled"
@@ -198,6 +239,18 @@
     "vegAvailableWater": {
       "approach": "rootWaterEfficiency"
     },
+    "vegClass": {
+      "approach": "MODIS_IGBP_PlantForm"
+    },
+    "vegDynamics": {
+      "approach": "forcing"
+    },
+    "vegFraction": {
+      "approach": "forcing"
+    },
+    "vegQualityTraits": {
+      "approach": "vegType"
+    },
     "waterBalance": {
       "approach": "simple",
       "use_in_spinup": false
@@ -208,38 +261,16 @@
     "wCycleBase": {
       "approach": "simple"
     },
-    "constants": {
-      "approach": "numbers"
-    },
     "WUE": {
       "approach": "expVPDDayCo2"
     }
   },
   "pools": {
-    "carbon": {
-      "combine": "cEco",
-      "components": {
-        "cVeg": {
-          "Root": [1, 25.0],
-          "Wood": [1, 25.0],
-          "Leaf": [1, 25.0],
-          "Reserve": [1, 10.0]
-        },
-        "cLit": {
-          "Fast": [1, 100.0],
-          "Slow": [1, 250.0]
-        },
-        "cSoil": {
-          "Slow": [1, 500.0],
-          "Old": [1, 1000.0]
-        }
-      },
-      "state_variables": {}
-    },
+    "carbon": "GSI",
     "water": {
       "combine": "TWS",
       "components": {
-        "soilW": [[50.0, 200.0, 750.0, 1000.0], 100.0],
+        "soilW": [[50.0, 200.0, 750.0, 1000.0, 3000.0, 5000.0, 40000.0], 100.0],
         "groundW": [1, 1000.0],
         "snowW": [1, 0.01],
         "surfaceW": [1, 0.01]
