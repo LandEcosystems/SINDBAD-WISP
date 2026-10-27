@@ -57,7 +57,7 @@ export SINDBAD_WISP_FIRE_VAR="WISP_fire_binary"
 export SINDBAD_MAKE_COMPARISON=1
 
 # one job per entity with P cpus
-export SINDBAD_THREADS=48                   # P, the threads of the run of one entity
+export SINDBAD_THREADS=24                   # P, the threads of the run of one entity
 
 # submitting: jobs is one job per entity, refilled by a watcher while the experiment
 # holds at most SINDBAD_USE_PERCENT % of the available cpus and memory of the
@@ -69,8 +69,8 @@ export SINDBAD_USE_PERCENT=75
 # restart the watcher after edits
 export SINDBAD_WATCH_MINUTES=10
 export SINDBAD_MAX_JOBS=""                  # n, array mode only
-export SINDBAD_MEM="64G"
-export SINDBAD_HEAP_HINT="48G"              # Julia heap size hint, below SINDBAD_MEM
+export SINDBAD_MEM="32G"
+export SINDBAD_HEAP_HINT="24G"              # Julia heap size hint, below SINDBAD_MEM
 export SINDBAD_TIME="1-00:00:00"
 export SINDBAD_PARTITION="work"
 
