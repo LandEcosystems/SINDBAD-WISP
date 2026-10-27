@@ -25,7 +25,7 @@
     "calc_cost": false,
     "catch_model_errors": true,
     "debug_model": false,
-    "filter_nan_pixels": false,
+    "filter_nan_pixels": true,
     "inline_update": false,
     "run_forward": true,
     "run_optimization": false,
