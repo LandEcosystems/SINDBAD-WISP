@@ -16,7 +16,7 @@ output_path         = abspath(joinpath(@__DIR__, output_path));
 make_plots          = true;
 # forcing file of the entity, which replaces `default_forcing.data_path` of the forcing json.
 # A relative path is taken from this script's directory.
-entity              = "MED_FR_01";
+entity              = "MED_ES_01";
 path_forcing        = "../data/WISP/daily_master_dev_v5_$(entity).nc";
 path_forcing        = abspath(joinpath(@__DIR__, path_forcing));
 isfile(path_forcing) ? nothing : error("oops... forcing does not exist : $(path_forcing)");
@@ -32,7 +32,7 @@ date_end            = "2023-12-31T00:00:00";
 # the block is centered on the grid unless pixel_center gives the (lat, lon) array positions
 # of its center, e.g., pixel_center = (64, 64). n_pixels = 1 runs a single pixel.
 n_pixels            = 8;
-n_pixels            = nothing;
+# n_pixels            = nothing;
 pixel_center        = nothing;
 
 # Sindbad subsets by coordinate value and not by position, so the values of the chosen

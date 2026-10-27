@@ -42,20 +42,12 @@
       "source_to_sindbad_unit": 0.99,
       "source_variable": "viirs_fire_binary"
     },
-    "f_dist_intensity": {
-      "bounds": [0, 1],
-      "standard_name": "disturbance intensity (explicit zero-disturbance assumption)",
-      "sindbad_unit": "fraction",
-      "source_unit": "fraction",
-      "source_variable": "f_dist_intensity_assumed_zero",
-      "space_time_type": "spatial"
-    },
     "f_dist_year": {
       "bounds": [0.0, 10000],
       "standard_name": "disturbance_year",
       "sindbad_unit": "-",
       "source_product": "Besnard2018",
-      "source_variable": "disturbance_year_2010",
+      "source_variable": "disturbance_year",
       "space_time_type": "spatial"
     },
     "f_tree_frac": {
@@ -78,7 +70,8 @@
       "standard_name": "Photosynthetically active radiation (pre-derived in WISP file)",
       "sindbad_unit": "MJ m-2 d-1",
       "source_unit": "MJ m-2 d-1",
-      "source_variable": "f_PAR"
+      "source_to_sindbad_unit": 0.50,
+      "source_variable": "f_rg"
     },
     "f_rain": {
       "bounds": [0, 300],
@@ -171,7 +164,7 @@
       "source_product": "CLM",
       "source_to_sindbad_unit": 1000.0,
       "source_unit": "m",
-      "source_variable": "soil_depth_CLM",
+      "source_variable": "soil_depth_SoilGrids",
       "space_time_type": "spatial"
     },
     "f_orgm": {
@@ -180,7 +173,7 @@
       "sindbad_unit": "-",
       "source_unit": "g kg-1",
       "source_to_sindbad_unit": 0.00,
-      "source_variable": "f_orgm_candidate",
+      "source_variable": "f_sand",
       "space_time_type": "spatiovertical"
     }
   }

@@ -38,7 +38,7 @@
       "approach": "VanDijk2010"
     },
     "cBiomass": {
-      "approach": "treeGrass_cVegReserveScaling"
+      "approach": "vegType"
     },
     "cCycle": {
       "approach": "simple"
@@ -128,7 +128,7 @@
       "approach": "none"
     },
     "cVegetationDieOff": {
-      "approach": "forcing",
+      "approach": "none",
       "use_in_spinup": false
     },
     "drainage": {

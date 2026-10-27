@@ -5,7 +5,7 @@
       "model_structure": "model_structure_WISP_DD.json"
     },
     "domain": "WISP",
-    "name": "AU-WISP",
+    "name": "",
     "time": {
       "date_begin": "2014-01-01T11:00:00",
       "date_end": "2023-12-31T11:00:00",
@@ -19,7 +19,6 @@
     "model_number_type": "Float32",
     "parallelization": "threads",
     "tolerance": 1.0e-2,
-    "visualization_backend": "Plots",
     "yax_max_cache": 2e9
   },
   "flags": {
@@ -30,7 +29,7 @@
     "inline_update": false,
     "run_forward": true,
     "run_optimization": false,
-    "run_lazy": true,
+    "run_lazy": false,
     "save_info": true,
     "spinup_TEM": true,
     "store_spinup": false
@@ -49,9 +48,24 @@
     "format": "nc",
     "output_array_type": "array",
     "path": null,
-    "plot_resolution": 100,
+    "plot_resolution": 200,
     "save_single_file": false,
     "variables": {
+      "diagnostics.c_fire_mortality": "d_cEco",
+      "diagnostics.c_fire_efflux": "d_cEco",
+      "diagnostics.c_fire_flow": "d_cEco",
+      "fluxes.auto_respiration": null,
+      "fluxes.evapotranspiration": null,
+      "fluxes.gpp": null,
+      "fluxes.hetero_respiration": null,
+      "fluxes.nee": null,
+      "fluxes.runoff": null,
+      "fluxes.transpiration": null,
+      "fluxes.eco_respiration": null,
+      "pools.cEco": "d_cEco",
+      "pools.TWS": "d_tws"
+    },
+    "variables_full": {
       "diagnostics.auto_respiration_f_airT": null,
       "diagnostics.k_shedding_leaf_frac": null,
       "diagnostics.k_shedding_root_frac": null,
@@ -99,7 +113,7 @@
       "diagnostics.c_flow_A_vec": 11,
       "states.aboveground_biomass": null,
       "states.fAPAR": null,
-      "states.fAPAR_bare": null,
+      "states.fAPAR_grid": null,
       "states.frac_snow": null,
       "states.PAW": "d_soil",
       "diagnostics.root_water_efficiency": "d_soil",

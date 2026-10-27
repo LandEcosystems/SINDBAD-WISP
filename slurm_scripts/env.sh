@@ -14,10 +14,13 @@ export SINDBAD_EXP_NAME="WISP_DD_fwd_PFT"
 # the experiment in setups/
 export SINDBAD_EXPERIMENT="WROASTED_WISP_DD/experiment_WISP_DD.json"
 
-# entities: each has a folder in SINDBAD_ENTITIES with its forcing file named
-# <SINDBAD_FORCING_PREFIX><entity>.nc, e.g., daily_master_dev_v5_MED_PT_01.nc
+# entities: each has a folder <entity><SINDBAD_FORCING_SUFFIX> in SINDBAD_ENTITIES with
+# its forcing file <SINDBAD_FORCING_PREFIX><entity><SINDBAD_FORCING_SUFFIX>.nc, e.g.,
+# MED_ES_01_frozen_v1/daily_master_dev_v5_MED_ES_01_frozen_v1.nc. The entity is named
+# without the suffix in the output.
 export SINDBAD_ENTITIES="/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/wisp_eos_q10_med10_v1/outputs/base_v5"
 export SINDBAD_FORCING_PREFIX="daily_master_dev_v5_"
+export SINDBAD_FORCING_SUFFIX="_frozen_v1"
 # period of the forcing files, which replaces the dates of the experiment json
 export SINDBAD_DATE_BEGIN="2014-01-12T00:00:00"
 export SINDBAD_DATE_END="2023-12-31T00:00:00"
@@ -30,11 +33,28 @@ export SINDBAD_DATE_END="2023-12-31T00:00:00"
 export SINDBAD_PARAMETERS="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT/params_by_pft_WR_DD_PFT.json"
 export SINDBAD_PARAMETER_MAP="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT/params_by_pft_WR_DD_PFT.zarr"
 
-# run options: 1 for true, 0 for false. A lazy run uses less memory, but the system
-# image is compiled for the run_lazy of the build, so rebuild after changing it.
-export SINDBAD_RUN_LAZY=0
+# run options: 1 for true, 0 for false. The runs are not lazy, as run_lazy is false
+# in the experiment json, since the plots and the comparison need the output in
+# memory.
 export SINDBAD_MAKE_PLOTS=1
 export SINDBAD_OVERWRITE=0                  # 1 reruns entities that already finished
+
+# fire experiments: 1 runs the experiment, 0 skips it. They differ in the source
+# variable of f_burnt_area and its scalar. Each job runs the switched-on experiments
+# of its entity one after another, with output in
+# <SINDBAD_OUTPUT>/<entity>/output_WISP_<entity>-full_<experiment>.
+#   No_Fire    : SINDBAD_VIIRS_FIRE_VAR scaled by 0.0, which turns the fire off
+#   VIIRS_Fire : SINDBAD_VIIRS_FIRE_VAR scaled by 0.99
+#   WISP_Fire  : SINDBAD_WISP_FIRE_VAR scaled by 0.99
+export SINDBAD_DO_NO_FIRE=1
+export SINDBAD_DO_VIIRS_FIRE=1
+export SINDBAD_DO_WISP_FIRE=1
+export SINDBAD_VIIRS_FIRE_VAR="viirs_fire_binary"
+export SINDBAD_WISP_FIRE_VAR="WISP_fire_binary"
+# 1 compares the switched-on experiments of an entity once all of them are done, with
+# maps, time series and metrics in <SINDBAD_OUTPUT>/<entity>/comparison. Nothing is
+# compared when only one experiment is switched on.
+export SINDBAD_MAKE_COMPARISON=1
 
 # one job per entity with P cpus
 export SINDBAD_THREADS=48                   # P, the threads of the run of one entity
