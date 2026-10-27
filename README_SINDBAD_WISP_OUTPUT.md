@@ -118,9 +118,11 @@ The files are compressed (`data_compression` in the experiment json: `level = 4`
 | `c_fire_flow.nc` | `c_fire_flow` | diagnostics | `d_cEco` (8) | gC m-2 day-1 | Carbon killed but not combusted, received by each litter or soil pool |
 | `c_fire_mortality.nc` | `c_fire_mortality` | diagnostics | `d_cEco` (8) | gC m-2 day-1 | Total carbon lost by each vegetation pool: its combusted part plus its flow to litter and soil |
 
-The fire diagnostics come from the `cFire_simple` model. Besides fire, they also include
-vegetation die-off when it happens. Litter and soil pools have no mortality: they lose
-carbon to fire only through `c_fire_efflux`.
+The fire diagnostics come from the `cFire_simple` model. The model can also add
+vegetation die-off to them, but die-off is turned off in these runs
+(`cVegetationDieOff` is `none` in the model structure json), so they show the effect of
+fire alone. Litter and soil pools have no mortality: they lose carbon to fire only
+through `c_fire_efflux`.
 
 ### Carbon pools, `d_cEco`
 

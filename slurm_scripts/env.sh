@@ -69,8 +69,10 @@ export SINDBAD_USE_PERCENT=75
 # restart the watcher after edits
 export SINDBAD_WATCH_MINUTES=10
 export SINDBAD_MAX_JOBS=""                  # n, array mode only
-export SINDBAD_MEM="32G"
-export SINDBAD_HEAP_HINT="24G"              # Julia heap size hint, below SINDBAD_MEM
+# the memory of the whole job, shared by its threads. A 128 x 128 grid holds about
+# 12 GB of output plus the forcing in memory, and 32G ran out of memory
+export SINDBAD_MEM="64G"
+export SINDBAD_HEAP_HINT="48G"              # Julia heap size hint, below SINDBAD_MEM
 export SINDBAD_TIME="1-00:00:00"
 export SINDBAD_PARTITION="work"
 
