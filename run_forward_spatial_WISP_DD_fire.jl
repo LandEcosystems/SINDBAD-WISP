@@ -32,7 +32,7 @@ date_end            = "2023-12-31T00:00:00";
 # ================================== fire experiments =============================================
 # the experiments differ in the source variable of f_burnt_area and its scalar, the
 # source_to_sindbad_unit of the forcing json. The output of each goes to
-# output_path/entity/<experiment>.
+# output_path/entity/output_WISP_<domain>_<experiment>.
 #   No_Fire    : VIIRS_FIRE_VAR scaled by 0.0, which turns the fire off
 #   VIIRS_Fire : VIIRS_FIRE_VAR scaled by 0.99
 #   WISP_Fire  : WISP_FIRE_VAR scaled by 0.99

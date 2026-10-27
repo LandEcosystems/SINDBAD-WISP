@@ -6,8 +6,8 @@ using Sindbad.DataLoaders.YAXArrays
 using Serialization
 
 # Forward run of the experiment in SINDBAD_EXPERIMENT for one entity per call, on the
-# whole lat/lon grid of its forcing file, with the setup of
-# run_forward_spatial_WISP_DD.jl.
+# whole lat/lon grid of its forcing file, with the fire experiments of the test script
+# run_forward_spatial_WISP_DD_fire.jl.
 #
 # Usage:
 #   julia --project=. slurm_scripts/forward_entity_exp.jl <entity_index>

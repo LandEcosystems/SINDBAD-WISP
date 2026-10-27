@@ -5,11 +5,24 @@ how folders and files are named, which variables are saved, and which figures an
 comparison files are made.
 
 The runs are made on SLURM, one job per entity, by `slurm_scripts/forward_entity_exp.jl`.
-How to set up and submit them is described in `slurm_scripts/README_SLURM.md`. All
-output is written to `$SINDBAD_OUTPUT`, set in `slurm_scripts/env.sh`.
-
-The experiment setup is in `setups/WROASTED_WISP_DD/`: the experiment, forcing, model
+How to set up and submit them is described in `slurm_scripts/README_SLURM.md`. The
+experiment setup is in `setups/WROASTED_WISP_DD/`: the experiment, forcing, model
 structure and parameter jsons.
+
+## Locations on the cluster
+
+| What | Path | Setting in `env.sh` |
+|---|---|---|
+| Output | `/Net/Groups/BGI/tscratch/skoirala/WISP_DD_fwd_PFT` | `SINDBAD_OUTPUT`, named after `SINDBAD_EXP_NAME` |
+| Forcing of the entities | `/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/wisp_eos_q10_med10_v1/outputs/base_v5` | `SINDBAD_ENTITIES` |
+| Parameters, PFT class map | `/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT/params_by_pft_WR_DD_PFT.json` and `.zarr` | `SINDBAD_PARAMETERS`, `SINDBAD_PARAMETER_MAP` |
+
+The forcing of an entity is in a folder of its own, e.g.
+`base_v5/MED_ES_01_frozen_v1/daily_master_dev_v5_MED_ES_01_frozen_v1.nc`. The entity is
+named without the `_frozen_v1` suffix in the output, e.g. `MED_ES_01`. The runs cover
+2014-01-12 to 2023-12-31, the period of the forcing files.
+
+In this document, `$SINDBAD_OUTPUT` stands for the output path above.
 
 ## 1. Fire experiments
 
@@ -105,11 +118,9 @@ The files are compressed (`data_compression` in the experiment json: `level = 4`
 | `c_fire_flow.nc` | `c_fire_flow` | diagnostics | `d_cEco` (8) | gC m-2 day-1 | Carbon killed but not combusted, received by each litter or soil pool |
 | `c_fire_mortality.nc` | `c_fire_mortality` | diagnostics | `d_cEco` (8) | gC m-2 day-1 | Total carbon lost by each vegetation pool: its combusted part plus its flow to litter and soil |
 
-The fire diagnostics come from the `cFire_simple` model, and their units are carbon per
-time step of one day. Output written before these variables were added to the Sindbad
-variable catalog has empty `units` and `long_name` in these three files. Besides fire,
-they also include vegetation die-off when it happens. Litter and soil pools have
-no mortality: they lose carbon to fire only through `c_fire_efflux`.
+The fire diagnostics come from the `cFire_simple` model. Besides fire, they also include
+vegetation die-off when it happens. Litter and soil pools have no mortality: they lose
+carbon to fire only through `c_fire_efflux`.
 
 ### Carbon pools, `d_cEco`
 
@@ -159,11 +170,12 @@ Python:
 ```python
 import xarray as xr
 
-gpp = xr.open_dataset("output_WISP_MED_ES_01-full_No_Fire/data/gpp.nc").gpp
+run = "/Net/Groups/BGI/tscratch/skoirala/WISP_DD_fwd_PFT/MED_ES_01/output_WISP_MED_ES_01-full_No_Fire"
+gpp = xr.open_dataset(f"{run}/data/gpp.nc").gpp
 gpp_map = gpp.mean("time")                    # time-mean map
 gpp_series = gpp.mean(["lat", "lon"])         # mean over all pixels per day
 
-ceco = xr.open_dataset("output_WISP_MED_ES_01-full_No_Fire/data/cEco.nc").cEco
+ceco = xr.open_dataset(f"{run}/data/cEco.nc").cEco
 c_veg = ceco.isel(d_cEco=slice(0, 4)).sum("d_cEco")   # vegetation carbon, pools 1 to 4
 ```
 
@@ -171,8 +183,8 @@ Julia:
 
 ```julia
 using YAXArrays, NetCDF
-ds = open_dataset("output_WISP_MED_ES_01-full_No_Fire/data/gpp.nc")
-gpp = ds.gpp
+run = "/Net/Groups/BGI/tscratch/skoirala/WISP_DD_fwd_PFT/MED_ES_01/output_WISP_MED_ES_01-full_No_Fire"
+gpp = open_dataset(joinpath(run, "data", "gpp.nc")).gpp
 ```
 
 ## 4. Setup of a run: `settings/` and `code/`
@@ -190,8 +202,8 @@ The jsons in `settings/` are unchanged copies of the setup files, so they are th
 for all three experiments. They do not include the changes the job script makes through
 `replace_info`: the run name, the output path, the forcing file, the period, the
 parameter files and the `f_burnt_area` source variable and scalar of the experiment.
-For example, every copy of the forcing json shows `viirs_fire_binary` with the scalar
-0.99 of the setup file.
+For example, the copy of the forcing json shows the `f_burnt_area` entry of the setup
+file in every run folder, also in the `No_Fire` folder, whose run used the scalar 0.0.
 
 The settings as they were used are in `settings/info.jld2`, under `info.experiment`.
 The forcing settings are in `info.experiment.data_settings.forcing`. To see which fire
@@ -200,7 +212,8 @@ forcing a run used:
 ```julia
 using Sindbad
 using Sindbad.Setup: load        # JLD2's load, as Sindbad provides it
-info = load("output_WISP_MED_ES_01-full_No_Fire/settings/info.jld2")["info"]
+run = "/Net/Groups/BGI/tscratch/skoirala/WISP_DD_fwd_PFT/MED_ES_01/output_WISP_MED_ES_01-full_No_Fire"
+info = load(joinpath(run, "settings", "info.jld2"))["info"]
 fba = info.experiment.data_settings.forcing.variables.f_burnt_area
 fba.source_variable, fba.source_to_sindbad_unit   # e.g. ("viirs_fire_binary", 0.0)
 ```

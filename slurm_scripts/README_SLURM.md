@@ -1,9 +1,10 @@
 # WISP forward runs on SLURM
 
 Runs the forward model for many entities on the cluster, one entity per job, with the
-setup of `run_forward_spatial_WISP_DD.jl`: the whole lat/lon grid of the entity's
-forcing file, and parameters per pixel from the PFT class map in
-`setups/WROASTED_WISP_DD/params/`. Each entity gets `SINDBAD_THREADS` (P) cpus.
+fire experiments of the test script `run_forward_spatial_WISP_DD_fire.jl`: the whole
+lat/lon grid of the entity's forcing file, and parameters per pixel from the PFT class
+map in `SINDBAD_PARAMETERS` and `SINDBAD_PARAMETER_MAP`. Each entity gets
+`SINDBAD_THREADS` (P) cpus. The output is described in `README_SINDBAD_WISP_OUTPUT.md`.
 
 `SINDBAD_SUBMIT_MODE` in `env.sh` sets how many run at once:
 
