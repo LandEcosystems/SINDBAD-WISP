@@ -141,7 +141,7 @@
       "approach": "sum"
     },
     "fAPAR": {
-      "approach": "LAIBareFrac"
+      "approach": "cVegLeafBareFrac"
     },
     "getPools": {
       "approach": "simple"
@@ -175,9 +175,6 @@
     },
     "groundWSoilWInteraction": {
       "approach": "VanDijk2010"
-    },
-    "LAI": {
-      "approach": "cVegLeaf"
     },
     "percolation": {
       "approach": "WBP"

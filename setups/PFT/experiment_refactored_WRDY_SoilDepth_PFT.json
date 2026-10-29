@@ -2,7 +2,7 @@
   "basics": {
     "config_files": {
       "forcing": "forcing_zarr_WRDY_SoilDepth_PFT.json",
-      "model_structure": "model_structure_WRDY_SoilDepth.json",
+      "model_structure": "../Site/model_structure_WRDY_SoilDepth.json",
       "optimization": "optimization_refactored_WRDY_SoilDepth_PFT.json"
     },
     "domain": "",
