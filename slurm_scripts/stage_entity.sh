@@ -27,10 +27,11 @@ export SINDBAD_DATE_END="2023-12-31T00:00:00"
 # vector for all pixels, and a json gives a parameter map. A non-empty
 # SINDBAD_PFT_PARAMETER_MAP is the zarr that replaces the data_path of the json, and
 # an empty one keeps that data_path.
-# The own map is "$SINDBAD_PFT_PARAMETERS_OWN" and "$SINDBAD_PFT_PARAMETER_MAP_OWN".
-# This uses the PFT run made in SINDBAD-TRENDY.
-export SINDBAD_PFT_PARAMETERS="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.json"
-export SINDBAD_PFT_PARAMETER_MAP="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.zarr"
+# e.g., the PFT run of SINDBAD-TRENDY:
+# /Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.json
+# and the .zarr next to it.
+export SINDBAD_PFT_PARAMETERS="$SINDBAD_PFT_PARAMETERS_OWN"
+export SINDBAD_PFT_PARAMETER_MAP="$SINDBAD_PFT_PARAMETER_MAP_OWN"
 # the PFT whose parameters the pixels of PFTs without parameters get when the map is
 # built. Empty gives them the default of each parameter.
 export SINDBAD_DEFAULT_PFT=""
@@ -49,7 +50,7 @@ export SINDBAD_MAKE_PLOTS=1
 #   WISP_Fire  : SINDBAD_WISP_FIRE_VAR scaled by 0.99
 export SINDBAD_DO_NO_FIRE=1
 export SINDBAD_DO_VIIRS_FIRE=1
-export SINDBAD_DO_WISP_FIRE=1
+export SINDBAD_DO_WISP_FIRE=0
 export SINDBAD_VIIRS_FIRE_VAR="viirs_fire_binary"
 export SINDBAD_WISP_FIRE_VAR="WISP_fire_binary"
 # 1 compares the switched-on experiments of an entity once all of them are done, with
