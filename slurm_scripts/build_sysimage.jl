@@ -3,7 +3,7 @@ using PackageCompiler
 # Builds a system image with Sindbad, CMAEvolutionStrategy, Plots and the code
 # compiled by a short run of the stage, so that the jobs start without loading or
 # compiling packages. The warmup run is SINDBAD_WARMUP_SCRIPT of the stage:
-# site_opti_warmup.jl, pft_opti_warmup.jl or forward_entity_warmup.jl. The image is
+# site_opti_warmup.jl, pft_opti_warmup.jl or entity_forward_warmup.jl. The image is
 # built only for the cpus in SINDBAD_CPU_TARGET, since every extra target is compiled
 # again.
 #

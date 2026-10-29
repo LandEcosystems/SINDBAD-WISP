@@ -10,8 +10,8 @@ using Serialization
 # run_forward_spatial_WISP_DD_fire.jl.
 #
 # Usage:
-#   julia --project=. slurm_scripts/forward_entity_exp.jl <domain_index>
-#   julia --project=. slurm_scripts/forward_entity_exp.jl --list-domains
+#   julia --project=. slurm_scripts/entity_forward_exp.jl <domain_index>
+#   julia --project=. slurm_scripts/entity_forward_exp.jl --list-domains
 #
 # Each entity is a domain. `--list-domains` writes domains.txt to the output
 # directory with one entity per line, so that line i is the entity of job or array

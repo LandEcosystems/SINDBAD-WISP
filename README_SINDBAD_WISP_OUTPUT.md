@@ -4,7 +4,7 @@ This document describes the output of the WISP fire forward runs: where it is wr
 how folders and files are named, which variables are saved, and which figures and
 comparison files are made.
 
-The runs are made on SLURM, one job per entity, by `slurm_scripts/forward_entity_exp.jl`.
+The runs are made on SLURM, one job per entity, by `slurm_scripts/entity_forward_exp.jl`.
 How to set up and submit them is described in `slurm_scripts/README_SLURM.md`. The
 experiment setup is in `setups/WISP/`: the experiment, forcing, model
 structure and parameter jsons.

@@ -30,14 +30,14 @@ The experiment names of the stages are `<SINDBAD_WISP_EXPERIMENT>_site`, `_pft` 
 | `run.sh` | Runs one stage. Submits in the `SINDBAD_SUBMIT_MODE` way |
 | `prepare_stage.sh` | Checks the stage before and combines its output, checks the system image |
 | `build_image.sh`, `build_sysimage.jl` | Builds the system image of a stage, with its warmup run compiled in |
-| `site_opti_warmup.jl`, `pft_opti_warmup.jl`, `forward_entity_warmup.jl` | The warmup runs |
+| `site_opti_warmup.jl`, `pft_opti_warmup.jl`, `entity_forward_warmup.jl` | The warmup runs |
 | `submit_as_jobs.sh` | `jobs` mode: one job per domain, `--watch` keeps filling the share |
 | `submit_as_array.sh` | `array` mode: all domains as one job array, for stages with a fixed job size |
 | `slurm_job_limit.sh` | Job size and the resource share |
 | `run.sbatch` | A job of a stage: runs one domain, retries Julia start-up failures |
 | `chain.sbatch` | A job of `run_all.sh`: the prep or watch step of a stage |
 | `common.jl` | Paths, `domains.txt` and done markers, shared by the Julia run scripts |
-| `site_opti_exp.jl`, `pft_opti_exp.jl`, `forward_entity_exp.jl` | The Julia run of one domain |
+| `site_opti_exp.jl`, `pft_opti_exp.jl`, `entity_forward_exp.jl` | The Julia run of one domain |
 
 ## Before the first run
 

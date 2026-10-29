@@ -1,0 +1,10 @@
+{
+  "default_parameter_map": {
+    "data_path": "/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.zarr",
+    "space_time_type": "spatial",
+    "lookup_parameter_map": {
+      "lookup_variable": "f_pft",
+      "default": null
+    }
+  }
+}

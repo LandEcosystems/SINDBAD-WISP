@@ -100,10 +100,10 @@ isfile(experiment_json) ? nothing : println("Hmmm... does not exist : $(experime
 #                  not in the map use the default of each parameter, unless the json sets
 #                  a `default` class in `lookup_parameter_map`.
 parameter_file      = "FR-Pue.csv";
-parameter_file      = "params/params_by_pft_WISP_DD.json";
+parameter_file      = "params/params_by_pft_WR_DD_PFT_RS.json";
 # the zarr of the class map, which replaces `default_parameter_map.data_path` of the json.
 # A relative path is taken from the directory of experiment_json.
-parameter_map       = "params/params_by_pft.zarr";
+parameter_map       = "params/params_by_pft_WR_DD_PFT_RS.zarr";
 
 
 param_tag = isnothing(parameter_file) ? "default" : splitext(basename(parameter_file))[1]

@@ -2,8 +2,8 @@ ENV["GKSwstype"] = "100"
 
 # A short forward run of a 4 x 4 block of pixels of the first entity and its plots,
 # run while the system image is built so that the code of a forward run is compiled
-# into the image. It uses the same setup as forward_entity_exp.jl.
-include(joinpath(@__DIR__, "forward_entity_exp.jl"))
+# into the image. It uses the same setup as entity_forward_exp.jl.
+include(joinpath(@__DIR__, "entity_forward_exp.jl"))
 
 entity = first(listEntities())
 # Sindbad subsets by coordinate value, so the values are read as Sindbad reads them

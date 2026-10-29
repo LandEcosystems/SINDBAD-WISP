@@ -6,8 +6,8 @@
 # the scripts in slurm_scripts/
 export SINDBAD_EXP_NAME="$SINDBAD_ENTITY_NAME"
 export SINDBAD_EXPERIMENT="WISP/experiment_WISP_DD.json"
-export SINDBAD_RUN_SCRIPT="forward_entity_exp.jl"
-export SINDBAD_WARMUP_SCRIPT="forward_entity_warmup.jl"
+export SINDBAD_RUN_SCRIPT="entity_forward_exp.jl"
+export SINDBAD_WARMUP_SCRIPT="entity_forward_warmup.jl"
 
 # entities: each has a folder <entity><SINDBAD_FORCING_SUFFIX> in SINDBAD_ENTITIES
 # with its forcing file <SINDBAD_FORCING_PREFIX><entity><SINDBAD_FORCING_SUFFIX>.nc,
@@ -27,8 +27,10 @@ export SINDBAD_DATE_END="2023-12-31T00:00:00"
 # vector for all pixels, and a json gives a parameter map. A non-empty
 # SINDBAD_PFT_PARAMETER_MAP is the zarr that replaces the data_path of the json, and
 # an empty one keeps that data_path.
-export SINDBAD_PFT_PARAMETERS="$SINDBAD_PFT_PARAMETERS_OWN"
-export SINDBAD_PFT_PARAMETER_MAP="$SINDBAD_PFT_PARAMETER_MAP_OWN"
+# The own map is "$SINDBAD_PFT_PARAMETERS_OWN" and "$SINDBAD_PFT_PARAMETER_MAP_OWN".
+# This uses the PFT run made in SINDBAD-TRENDY.
+export SINDBAD_PFT_PARAMETERS="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.json"
+export SINDBAD_PFT_PARAMETER_MAP="/Net/Groups/BGI/tscratch/skoirala/WR_DD_PFT_RS/params_by_pft_WR_DD_PFT_RS.zarr"
 # the PFT whose parameters the pixels of PFTs without parameters get when the map is
 # built. Empty gives them the default of each parameter.
 export SINDBAD_DEFAULT_PFT=""
