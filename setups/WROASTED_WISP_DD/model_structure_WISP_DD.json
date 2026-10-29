@@ -156,7 +156,7 @@
       "approach": "mult"
     },
     "gppDiffRadiation": {
-      "approach": "exp"
+      "approach": "De2025_Enhancement"
     },
     "gppDirRadiation": {
       "approach": "Maekelae2008"
