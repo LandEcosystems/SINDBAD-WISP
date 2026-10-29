@@ -1,6 +1,6 @@
 {
   "default_parameter_map": {
-    "data_path": "/Users/skoirala/research/RnD/SINDBAD-WISP/setups/WROASTED_WISP_DD/params/params_by_pft.zarr",
+    "data_path": "/Users/skoirala/research/RnD/SINDBAD-WISP/setups/WISP/params/params_by_pft.zarr",
     "space_time_type": "spatial",
     "lookup_parameter_map": {
       "lookup_variable": "f_pft",

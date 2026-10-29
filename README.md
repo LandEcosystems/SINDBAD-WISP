@@ -1,3 +1,11 @@
+## WISP experiments
+
+A WISP experiment optimizes SINDBAD at the FLUXNET sites, then per PFT starting from
+the site pools, and runs the WISP entities forward with the PFT parameters. The three
+stages and their setups are in `setups/Site`, `setups/PFT` and `setups/WISP`, and run
+on SLURM with `slurm_scripts/run_all.sh` or one stage at a time with
+`slurm_scripts/run.sh`. See `slurm_scripts/README_SLURM.md`.
+
 ## Sindbad Development Workspace
 
 This repository (`Sindbad-Dev-Template`) is a template repo for local development of the

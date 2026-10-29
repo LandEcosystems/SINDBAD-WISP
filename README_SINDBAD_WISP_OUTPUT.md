@@ -6,7 +6,7 @@ comparison files are made.
 
 The runs are made on SLURM, one job per entity, by `slurm_scripts/forward_entity_exp.jl`.
 How to set up and submit them is described in `slurm_scripts/README_SLURM.md`. The
-experiment setup is in `setups/WROASTED_WISP_DD/`: the experiment, forcing, model
+experiment setup is in `setups/WISP/`: the experiment, forcing, model
 structure and parameter jsons.
 
 ## Locations on the cluster
@@ -193,7 +193,7 @@ gpp = open_dataset(joinpath(run, "data", "gpp.nc")).gpp
 
 | File | Content |
 |---|---|
-| `settings/experiment_WISP_DD.json` | Copy of the experiment json in `setups/WROASTED_WISP_DD/` |
+| `settings/experiment_WISP_DD.json` | Copy of the experiment json in `setups/WISP/` |
 | `settings/forcing_WISP_DD.json` | Copy of the forcing json |
 | `settings/model_structure_WISP_DD.json` | Copy of the model structure json: the selected model of each process and the pools |
 | `settings/params_by_pft_*.json` | Copy of the parameter json: parameters per PFT class |

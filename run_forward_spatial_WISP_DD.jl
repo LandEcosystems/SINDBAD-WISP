@@ -62,7 +62,7 @@ end
 
 # ================================== setting up the experiment ====================================
 # experiment is all set up according to a (collection of) json file(s)
-experiment_json     = joinpath(@__DIR__,"setups/WROASTED_WISP_DD/","experiment_WISP_DD.json");
+experiment_json     = joinpath(@__DIR__,"setups/WISP/","experiment_WISP_DD.json");
 isfile(experiment_json) ? nothing : println("Hmmm... does not exist : $(experiment_json)");
 
 # parameters of the run. A relative path is taken from the directory of experiment_json.

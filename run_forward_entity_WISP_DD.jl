@@ -35,7 +35,7 @@ sites = sort(filter(s -> isdir(joinpath(path_sites, s)), readdir(path_sites)));
 
 # ================================== setting up the experiment ====================================
 # experiment is all set up according to a (collection of) json file(s)
-experiment_json     = joinpath(@__DIR__,"setups/WROASTED_WISP_DD/","experiment_WISP_DD.json");
+experiment_json     = joinpath(@__DIR__,"setups/WISP/","experiment_WISP_DD.json");
 isfile(experiment_json) ? nothing : println("Hmmm... does not exist : $(experiment_json)");
 
 run_lazy = false

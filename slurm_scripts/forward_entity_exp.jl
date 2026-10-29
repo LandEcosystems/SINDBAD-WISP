@@ -10,30 +10,26 @@ using Serialization
 # run_forward_spatial_WISP_DD_fire.jl.
 #
 # Usage:
-#   julia --project=. slurm_scripts/forward_entity_exp.jl <entity_index>
-#   julia --project=. slurm_scripts/forward_entity_exp.jl --list-entities
+#   julia --project=. slurm_scripts/forward_entity_exp.jl <domain_index>
+#   julia --project=. slurm_scripts/forward_entity_exp.jl --list-domains
 #
-# `--list-entities` writes entities.txt to the output directory with one entity per
-# line, so that line i is the entity of array task i. Inside a SLURM job array the
-# index is taken from SLURM_ARRAY_TASK_ID.
+# Each entity is a domain. `--list-domains` writes domains.txt to the output
+# directory with one entity per line, so that line i is the entity of job or array
+# task i. Inside a SLURM job array the index is taken from SLURM_ARRAY_TASK_ID.
 #
-# The settings come from slurm_scripts/env.sh, so source it first when running by
-# hand.
+# The settings come from slurm_scripts/env.sh with SINDBAD_STAGE=entity, so source it
+# first when running by hand.
 include(joinpath(ENV["SINDBAD_REPO"], "plot_forward_WISP_DD.jl"))
+include(joinpath(@__DIR__, "common.jl"))
 
-experiment_json = joinpath(ENV["SINDBAD_REPO"], "setups", ENV["SINDBAD_EXPERIMENT"])
 path_entities = ENV["SINDBAD_ENTITIES"]
-path_output = ENV["SINDBAD_OUTPUT"]
-path_list = joinpath(path_output, "entities.txt")
-mkpath(path_output)
-overwrite = ENV["SINDBAD_OVERWRITE"] == "1"
 make_plots = ENV["SINDBAD_MAKE_PLOTS"] == "1"
 make_comparison = ENV["SINDBAD_MAKE_COMPARISON"] == "1"
 date_begin = ENV["SINDBAD_DATE_BEGIN"]
 date_end = ENV["SINDBAD_DATE_END"]
 
-# an empty SINDBAD_PARAMETERS runs the default parameters of the model structure
-parameter_file = ENV["SINDBAD_PARAMETERS"]
+# an empty SINDBAD_PFT_PARAMETERS runs the default parameters of the model structure
+parameter_file = ENV["SINDBAD_PFT_PARAMETERS"]
 parameter_file = isempty(parameter_file) ? nothing : parameter_file
 if !isnothing(parameter_file)
     # joinpath keeps an absolute path as it is
@@ -41,11 +37,11 @@ if !isnothing(parameter_file)
     isfile(path_parameter_file) || error("oops... parameter file does not exist : $(path_parameter_file)")
 end
 # a relative data_path in the json is taken from the data depot, so the zarr of a
-# parameter map is given as an absolute path. An empty SINDBAD_PARAMETER_MAP keeps the
-# data_path of the json.
+# parameter map is given as an absolute path. An empty SINDBAD_PFT_PARAMETER_MAP
+# keeps the data_path of the json.
 path_parameter_map = nothing
-if !isnothing(parameter_file) && endswith(parameter_file, ".json") && !isempty(ENV["SINDBAD_PARAMETER_MAP"])
-    path_parameter_map = abspath(joinpath(dirname(experiment_json), ENV["SINDBAD_PARAMETER_MAP"]))
+if !isnothing(parameter_file) && endswith(parameter_file, ".json") && !isempty(ENV["SINDBAD_PFT_PARAMETER_MAP"])
+    path_parameter_map = abspath(joinpath(dirname(experiment_json), ENV["SINDBAD_PFT_PARAMETER_MAP"]))
     isdir(path_parameter_map) || error("oops... parameter map does not exist : $(path_parameter_map)")
 end
 
@@ -176,27 +172,23 @@ function compareEntity(entity, output_path; subset_tag="full")
 end
 
 # A marker per finished fire experiment of an entity lets a rerun of the job skip the
-# experiments that are done. The marker of the entity is written once all switched-on
-# experiments are done, and the submit scripts skip the entities that have one.
-donePath(entity) = joinpath(path_output, "done", entity)
+# experiments that are done. The marker of the entity, from common.jl, is written
+# once all switched-on experiments are done, and the submit scripts skip the
+# entities that have one.
 donePath(entity, fire) = joinpath(path_output, "done", fire.name, entity)
-isDone(entity) = isfile(donePath(entity)) && !overwrite
 isDone(entity, fire) = isfile(donePath(entity, fire)) && !overwrite
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    if "--list-entities" in ARGS
+    if "--list-domains" in ARGS
         entities = listEntities()
-        write(path_list, join(entities, "\n") * "\n")
-        println("$(length(entities)) entities written to $(path_list)")
+        writeDomains(entities, ones(Int, length(entities)))
         exit(0)
     end
 
-    entity_index = haskey(ENV, "SLURM_ARRAY_TASK_ID") ? parse(Int, ENV["SLURM_ARRAY_TASK_ID"]) :
-        isempty(ARGS) ? error("give the entity index as the first argument or through SLURM_ARRAY_TASK_ID") :
-        parse(Int, ARGS[1])
-    # the entity is read from entities.txt, so the job runs the entity it was
+    entity_index = domainIndex()
+    # the entity is read from domains.txt, so the job runs the entity it was
     # submitted for
-    entity = strip(readlines(path_list)[entity_index])
+    entity = first(split(readlines(path_domains)[entity_index]))
 
     if isDone(entity)
         println("entity $(entity_index) $(entity) is already done, skipping")
@@ -228,6 +220,5 @@ if abspath(PROGRAM_FILE) == @__FILE__
         compareEntity(entity, path_output)
     end
 
-    mkpath(dirname(donePath(entity)))
-    write(donePath(entity), "$(entity_index)\n")
+    markDone(entity, entity_index)
 end

@@ -9,6 +9,7 @@ SindbadTEM = "6686e6de-2010-4bf8-9178-b2bcc470766e"
 TimeSamplers = "a27efc82-29b7-4223-84cd-12fc64c7a5bb"
 
 [sources]
+ErrorMetrics = {path = "dev/ErrorMetrics.jl"}
 OmniTools = {path = "dev/OmniTools.jl"}
 Sindbad = {path = "dev/Sindbad.jl"}
 SindbadTEM = {path = "dev/Sindbad.jl/SindbadTEM"}

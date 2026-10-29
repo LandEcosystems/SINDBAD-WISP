@@ -1,6 +1,5 @@
 #!/bin/bash
-# Helpers sourced by the submit scripts to fit the jobs in a share of the partition.
-# See README_SLURM.md.
+# Helpers sourced by the submit scripts to size the jobs. See README_SLURM.md.
 
 # convert a SLURM memory value such as 12G or 500M to MB
 memory_in_mb() {
@@ -13,12 +12,8 @@ memory_in_mb() {
     esac
 }
 
-# jobs of the experiment are named <prefix><entity>, the array <prefix>array
+# jobs of the experiment are named <prefix><domain>, the array <prefix>array
 job_prefix="${SINDBAD_EXP_NAME}_"
-
-# the cpus and memory in MB of one job
-job_cpus="$SINDBAD_THREADS"
-job_mem=$(memory_in_mb "$SINDBAD_MEM")
 
 # Prints "<cpus> <memory in MB>" held by the jobs of the experiment in the given
 # states, e.g., RUNNING or RUNNING,PENDING.
@@ -60,9 +55,32 @@ resource_budget() {
             }'
 }
 
-# resources of one job, for sbatch
-sbatch_resources=(--partition="$SINDBAD_PARTITION" --cpus-per-task="$job_cpus"
-    --mem="${job_mem}M" --time="$SINDBAD_TIME")
-if [ -n "$SINDBAD_EXCLUDE" ]; then
-    sbatch_resources+=(--exclude="$SINDBAD_EXCLUDE")
-fi
+# Sets domain_cpus, domain_mem (MB) and domain_heap_hint for a domain of n_sites
+# sites. With SINDBAD_MAX_THREADS the job grows with its sites, else it has the fixed
+# SINDBAD_THREADS and SINDBAD_MEM. Usage: domain_resources n_sites
+domain_resources() {
+    local n_sites="$1"
+    if [ -n "${SINDBAD_MAX_THREADS:-}" ]; then
+        if [ "$n_sites" -le "$SINDBAD_ONE_THREAD_SITES" ]; then
+            domain_cpus="$n_sites"
+        else
+            domain_cpus=$(( (2 * n_sites + 2) / 3 ))
+        fi
+        (( domain_cpus > SINDBAD_MAX_THREADS )) && domain_cpus="$SINDBAD_MAX_THREADS"
+        domain_mem=$(( $(memory_in_mb "$SINDBAD_MEM_BASE") + n_sites * $(memory_in_mb "$SINDBAD_MEM_PER_SITE") ))
+        domain_heap_hint="$(( domain_mem * 3 / 4 ))M"
+    else
+        domain_cpus="$SINDBAD_THREADS"
+        domain_mem=$(memory_in_mb "$SINDBAD_MEM")
+        domain_heap_hint="$SINDBAD_HEAP_HINT"
+    fi
+}
+
+# resources of one job with the sizes set by domain_resources, for sbatch
+domain_sbatch_resources() {
+    sbatch_resources=(--partition="$SINDBAD_PARTITION" --cpus-per-task="$domain_cpus"
+        --mem="${domain_mem}M" --time="$SINDBAD_TIME")
+    if [ -n "$SINDBAD_EXCLUDE" ]; then
+        sbatch_resources+=(--exclude="$SINDBAD_EXCLUDE")
+    fi
+}
