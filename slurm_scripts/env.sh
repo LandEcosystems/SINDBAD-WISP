@@ -4,7 +4,7 @@
 # slurm_scripts/ and combine_outputs/ reads this file. See README_SLURM.md.
 
 # the WISP experiment names the output root of all its stages
-export SINDBAD_WISP_EXPERIMENT="WISP_DD"
+export SINDBAD_WISP_EXPERIMENT="WISP_V1_202610"
 # the stage of the scripts: site, pft or entity. A value set before, e.g.
 # SINDBAD_STAGE=pft ./slurm_scripts/run.sh, is kept.
 export SINDBAD_STAGE="${SINDBAD_STAGE:-site}"
