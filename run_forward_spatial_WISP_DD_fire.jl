@@ -20,7 +20,7 @@ make_plots          = true;
 make_comparison     = true;
 # forcing file of the entity, which replaces `default_forcing.data_path` of the forcing json.
 # A relative path is taken from this script's directory.
-entity              = "MED_ES_01";
+entity              = "B1_ESP_Guadalajara_near-Guadalajara_41.0270N_002.0000W_T1508";
 path_forcing        = "../data/WISP/daily_master_dev_v5_$(entity)_frozen_v1.nc";
 path_forcing        = abspath(joinpath(@__DIR__, path_forcing));
 isfile(path_forcing) ? nothing : error("oops... forcing does not exist : $(path_forcing)");
