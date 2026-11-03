@@ -26,7 +26,7 @@ All settings are in `slurm_scripts/env.sh` and the stage files
 | Output root | `/Net/Groups/BGI/tscratch/skoirala/WISP_V1_202610` | `SINDBAD_OUTPUT_ROOT` in `env.sh`, named after `SINDBAD_WISP_EXPERIMENT` |
 | Output of a stage | `<output root>/site`, `/pft` and `/entity` | `SINDBAD_OUTPUT` of the stage |
 | Site data of the site and PFT stages | `/Net/Groups/BGI/work_3/sindbad/data/WR_DD_202610/FLUXNET_v2023_12_1D_202610_skoirala.zarr` | `SINDBAD_DATA_DEPOT` and `SINDBAD_INPUT` in `env.sh` |
-| Forcing of the entities | `/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/wisp_eos_q10_med10_v1/outputs/base_v5` | `SINDBAD_ENTITIES` in `stage_entity.sh` |
+| Forcing of the entities | `/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes` | `SINDBAD_ENTITIES` in `stage_entity.sh` |
 | System images | `/Net/Groups/BGI/scratch/skoirala/sysimages/sindbad_<stage exp>.so` | `SINDBAD_SYSIMAGE_DIR` in `env.sh` |
 
 In this document, `$SINDBAD_OUTPUT_ROOT` stands for the output root above, and the
@@ -229,8 +229,9 @@ Forward runs of the WISP entities with the PFT parameters of section 5, one enti
 job, on the whole lat/lon grid of its forcing file.
 
 The forcing of an entity is in a folder of its own, e.g.
-`base_v5/MED_ES_01_frozen_v1/daily_master_dev_v5_MED_ES_01_frozen_v1.nc`. The entity is
-named without the `_frozen_v1` suffix in the output, e.g. `MED_ES_01`. The runs cover
+`cubes/<entity>_frozen_v1/daily_master_dev_v5_<entity>_frozen_v1.nc`. The entity is
+named without the `_frozen_v1` suffix in the output, e.g.
+`B1_ESP_Guadalajara_near-Guadalajara_41.0270N_002.0000W_T1508`. The runs cover
 2014-01-12 to 2023-12-31, the period of the forcing files, set by `SINDBAD_DATE_BEGIN`
 and `SINDBAD_DATE_END` in `stage_entity.sh`.
 

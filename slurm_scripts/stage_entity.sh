@@ -11,9 +11,10 @@ export SINDBAD_WARMUP_SCRIPT="entity_forward_warmup.jl"
 
 # entities: each has a folder <entity><SINDBAD_FORCING_SUFFIX> in SINDBAD_ENTITIES
 # with its forcing file <SINDBAD_FORCING_PREFIX><entity><SINDBAD_FORCING_SUFFIX>.nc,
-# e.g., MED_ES_01_frozen_v1/daily_master_dev_v5_MED_ES_01_frozen_v1.nc. The entity is
-# named without the suffix in the output.
-export SINDBAD_ENTITIES="/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/wisp_eos_q10_med10_v1/outputs/base_v5"
+# e.g., <entity>_frozen_v1/daily_master_dev_v5_<entity>_frozen_v1.nc for the entity
+# B1_ESP_Guadalajara_near-Guadalajara_41.0270N_002.0000W_T1508. The entity is named
+# without the suffix in the output.
+export SINDBAD_ENTITIES="/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes"
 export SINDBAD_FORCING_PREFIX="daily_master_dev_v5_"
 export SINDBAD_FORCING_SUFFIX="_frozen_v1"
 # period of the forcing files, which replaces the dates of the experiment json
