@@ -119,7 +119,7 @@ def validate_dependencies(config, rid):
             "scope": "Current source masks, ownership, effective metadata and parameter values match frozen audit"}
 
 
-def independent_spotcheck(config, rid):
+def independent_spotcheck(config, rid, fire_pixel=False):
     """Recompute one fixed owned pixel from source, independently of engine helpers.
 
     This is a limited arithmetic regression audit, not a replacement for the
@@ -133,9 +133,20 @@ def independent_spotcheck(config, rid):
     groups = get_groups(rid, Path(config["batch_root"]) / "qa")
     cells = np.argwhere(groups["owned_area_m2"] > 0)
     row, col = cells[len(cells) // 2]
+    selection = "Middle row-major owned runnable pixel, fixed independently of model outputs"
     checks, failures, budgets = 0, [], []
     compact_path = root / "regions" / rid / "compact.nc"
     with netCDF4.Dataset(compact_path) as compact:
+        if fire_pixel:
+            fire_total = np.zeros(groups["owned_area_m2"].shape)
+            for component in VARIABLES["c_fire_efflux"]["components"]:
+                values = np.ma.filled(compact.variables["c_fire_efflux__" + component + "_annual"][1, ...], np.nan)
+                fire_total += np.nansum(values, axis=0)
+            candidates = np.argwhere((groups["owned_area_m2"] > 0) & (fire_total > 0))
+            if not len(candidates):
+                return {"region_id": rid, "status": "not_applicable", "reason": "No owned runnable pixel has positive saved VIIRS fire efflux"}
+            row, col = candidates[0]
+            selection = "First row-major owned runnable pixel with positive saved VIIRS fire efflux; targeted arithmetic QA, not scientific sample selection"
         years = np.asarray(compact.variables["year"][:], int)
         for si, scenario in enumerate(SCENARIOS):
             stored = {}
@@ -176,7 +187,7 @@ def independent_spotcheck(config, rid):
             budgets.append({"scenario": scenario, "maximum_abs_residual": float(np.abs(residual).max()),
                             "days_checked": len(residual), "days_exceeding_quantization_and_model_bound": int((np.abs(residual) > bound).sum())})
     return {"region_id": rid, "pixel_lat_index": int(row), "pixel_lon_index": int(col),
-            "selection": "Middle row-major owned runnable pixel, fixed independently of model outputs",
+            "selection": selection,
             "annual_component_values_checked": checks, "annual_mismatches": failures, "carbon_budgets": budgets,
             "status": "pass" if not failures and all(b["days_exceeding_quantization_and_model_bound"] == 0 for b in budgets) else "fail",
             "scope": "One deterministic pixel; annual summaries of all 50 saved components and full-period budget; not full spatial validation"}

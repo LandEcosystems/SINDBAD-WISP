@@ -11,5 +11,4 @@ set -euo pipefail
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 export PYTHONPATH="$ANALYSIS_CODE${PYTHONPATH:+:$PYTHONPATH}"
 py="${ANALYSIS_PYTHON:?Set the audited scientific Python executable}"
-"$py" -m result_analysis --config "$ANALYSIS_CONFIG" references
 "$py" -m result_analysis --config "$ANALYSIS_CONFIG" report

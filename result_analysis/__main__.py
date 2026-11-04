@@ -15,7 +15,8 @@ def main():
         if isinstance(value,str):
             config[key]=os.path.expandvars(value)
             if '${' in config[key]:raise ValueError('Set required environment variable for '+key+': '+value)
-    for key,env in [('source_geometry','WISP_ANALYSIS_GEOMETRY'),('pyrome_path','WISP_ANALYSIS_PYROME')]:
+    for key,env in [('source_geometry','WISP_ANALYSIS_GEOMETRY'),('pyrome_path','WISP_ANALYSIS_PYROME'),
+                    ('mod16_archive_root','WISP_ANALYSIS_MOD16_ARCHIVE')]:
         if key in config:os.environ[env]=config[key]
     root=Path(config['output_root'])
     root.mkdir(parents=True,exist_ok=True)
@@ -40,8 +41,12 @@ def main():
         snap=json.loads((root/'inventory.json').read_text())
         rid=args.region or snap['regions'][args.index]['region_id']
         try:
+            from .integrity import verify_region_artifacts
+            if (root/'regions'/rid/'completion.json').exists():
+                verify_region_artifacts(root/'regions'/rid)
             provenance=validate_dependencies(config,rid)
             result=process_region(config,rid,snap['source_metadata_fingerprint'])
+            verify_region_artifacts(root/'regions'/rid)
             from .context import build_context
             build_context(config,rid)
             validate_dependencies(config,rid)
@@ -52,11 +57,16 @@ def main():
             raise
     elif args.command=='references':
         from .references import compare_region
+        from .integrity import verify_region_artifacts
         regions=[root/'regions'/args.region] if args.region else [p.parent for p in (root/'regions').glob('*/completion.json')]
         for d in regions:
+            verify_region_artifacts(d)
             compare_region(d/'compact.nc',d/'references',config)
     elif args.command=='report':
         from .report import generate
+        from .integrity import verify_region_artifacts
+        verified=[verify_region_artifacts(p.parent) for p in (root/'regions').glob('*/completion.json')]
+        atomic_json(root/'artifact_integrity.json',dict(status='pass',regions=verified))
         print(generate(root))
     else:
         done=[json.loads(p.read_text()) for p in (root/'regions').glob('*/completion.json')]

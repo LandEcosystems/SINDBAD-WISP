@@ -36,11 +36,15 @@ extracts effective JLD2 forcing, PFT parameters, source masks and statistical ow
 versions fail rather than silently mix. The engine reads native NetCDF chunks with
 the full time axis, saving compact summaries instead of a second daily dataset.
 
-For Slurm, set `ANALYSIS_CODE`, `ANALYSIS_CONFIG`, `ANALYSIS_IDS` and submit
+For Slurm, set `ANALYSIS_CODE`, `ANALYSIS_CONFIG`, `ANALYSIS_IDS`, `ANALYSIS_PYTHON` and submit
 `slurm_region.sh` with `--array=0-292%8`. A line in the IDs file is one region.
 The first trial uses the first, middle and last sorted completed IDs; selection does
 not depend on output quality or model effect. Each job requests 4 CPUs, 32 GiB, 24 hours.
 The CPU-only analysis requests no GPU devices. Keep code deployments immutable.
+
+The MOD16 adapter also requires GDAL with HDF4 support and a working PROJ database
+in the audited environment. GDAL is not installed implicitly from pip. Reference
+preparation is a separate array stage; `slurm_finish.sh` only renders the report.
 
 Do not overwrite `inventory.json` for an enlarged or changed source snapshot.
 Create a versioned output root, freeze the new inventory, and reuse a region only
