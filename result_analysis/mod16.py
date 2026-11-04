@@ -26,6 +26,7 @@ ARCHIVE_ROOT = Path(os.environ.get("WISP_ANALYSIS_MOD16_ARCHIVE", "configured_so
 GUIDE = "https://www.earthdata.nasa.gov/s3fs-public/2025-04/MOD16_User_Guide_V61.pdf"
 SPECIFICATION = "https://ladsweb.modaps.eosdis.nasa.gov/filespec/MODIS/61/MOD16A2GF_c61"
 POLICY = "valid-range 46-composite annual total; preserve input QC diagnostics; no implicit latest-version selection"
+CACHE_PROTOCOL = "closed-gdal-handles-full-readback-v2"
 
 
 def _gdal():
@@ -116,6 +117,49 @@ def _read_granule(record, temporary):
     return physical, strict, quality, geometry, dict(evidence, et_qc_array_sha256=digest)
 
 
+def _write_verified_raster(path, geometry, bands, names, metadata):
+    """Close every GDAL handle and verify lossless readback before publication."""
+    gdal = _gdal()
+    ds = gdal.GetDriverByName("GTiff").Create(
+        str(path), geometry[2][1], geometry[2][0], len(bands), gdal.GDT_Float32,
+        options=["COMPRESS=DEFLATE", "TILED=YES"])
+    if ds is None:
+        raise RuntimeError("Unable to create MOD16 staging raster")
+    band = None
+    try:
+        ds.SetGeoTransform(geometry[0]); ds.SetProjection(geometry[1])
+        for number, (values, name) in enumerate(zip(bands, names), 1):
+            band = ds.GetRasterBand(number)
+            band.WriteArray(values); band.SetDescription(name)
+            band.SetNoDataValue(float("nan"))
+            band = None
+        ds.SetMetadata(metadata)
+        ds.FlushCache()
+    finally:
+        # A retained Band keeps its Dataset alive. Releasing only ds can leave
+        # the compressed file open after rename/checksum/publication.
+        band = None
+        ds = None
+    check = gdal.Open(str(path), gdal.GA_ReadOnly)
+    if check is None:
+        raise RuntimeError("Unable to reopen MOD16 staging raster")
+    try:
+        if (check.RasterCount != len(bands) or
+                (check.RasterYSize, check.RasterXSize) != geometry[2] or
+                check.GetGeoTransform() != geometry[0]):
+            raise RuntimeError("MOD16 staging raster geometry mismatch")
+        for number, expected in enumerate(bands, 1):
+            band = check.GetRasterBand(number)
+            actual = band.ReadAsArray()
+            band = None
+            if actual is None or not np.array_equal(actual, np.asarray(expected, np.float32), equal_nan=True):
+                raise RuntimeError("MOD16 staging raster failed complete lossless readback")
+    finally:
+        band = None
+        check = None
+    return file_hash(path)
+
+
 def annual_tile(year, tile, cache_root, archive_root=ARCHIVE_ROOT):
     """Stream 46 unique composites, cache only a compact annual tile and evidence."""
     gdal = _gdal()
@@ -124,7 +168,8 @@ def annual_tile(year, tile, cache_root, archive_root=ARCHIVE_ROOT):
     begin, end = dt.date(year, 1, 1), dt.date(year + 1, 1, 1)
     days = [begin + dt.timedelta(days=x) for x in range(0, (end - begin).days, 8)]
     records = [unique_granule(day, tile, archive_root) for day in days]
-    fingerprint = canonical_hash({"year": year, "tile": tile, "sources": records, "policy": POLICY})
+    fingerprint = canonical_hash({"year": year, "tile": tile, "sources": records,
+                                  "policy": POLICY, "cache_protocol": CACHE_PROTOCOL})
     folder = Path(cache_root) / str(year) / tile / fingerprint
     folder.mkdir(parents=True, exist_ok=True)
     with (folder / "build.lock").open("a") as lock:
@@ -158,17 +203,14 @@ def annual_tile(year, tile, cache_root, archive_root=ARCHIVE_ROOT):
                 evidence.append(item)
         valid = count == len(days)
         temp = output.with_name("annual_et.partial.tif")
-        ds = gdal.GetDriverByName("GTiff").Create(str(temp), geometry[2][1], geometry[2][0], 4, gdal.GDT_Float32,
-                                                  options=["COMPRESS=DEFLATE", "TILED=YES"])
-        ds.SetGeoTransform(geometry[0]); ds.SetProjection(geometry[1])
         bands = [np.where(valid, total, np.nan), valid.astype(float), strict_count / len(days), qc_missing_count / len(days)]
         names = ["Annual ET (mm), all 46 composites required", "Complete-year ET area validity", "Fraction with strict input QC", "Fraction with missing inherited input QC"]
-        for number, (values, name) in enumerate(zip(bands, names), 1):
-            band = ds.GetRasterBand(number); band.WriteArray(values); band.SetDescription(name); band.SetNoDataValue(float("nan"))
-        ds.SetMetadata({"product": "MOD16A2GF.061", "year": str(year), "policy": POLICY, "source_fingerprint": fingerprint})
-        ds.FlushCache(); ds = None
+        digest = _write_verified_raster(temp, geometry, bands, names,
+            {"product": "MOD16A2GF.061", "year": str(year), "policy": POLICY,
+             "source_fingerprint": fingerprint, "cache_protocol": CACHE_PROTOCOL})
         os.replace(temp, output)
-        atomic_json(done, {"source_fingerprint": fingerprint, "sha256": file_hash(output), "sources": records,
+        atomic_json(done, {"source_fingerprint": fingerprint, "sha256": digest, "sources": records,
+                           "cache_protocol": CACHE_PROTOCOL, "full_readback_verified": True,
                            "granule_metadata": evidence, "composites": len(days), "calendar_days": (end - begin).days,
                            "valid_native_pixels": int(valid.sum()), "guide": GUIDE, "specification": SPECIFICATION,
                            "qc_policy": POLICY, "units": "mm year-1", "gdal_version": gdal.VersionInfo()})
@@ -226,9 +268,16 @@ def mod16_pairs(ds, region_id, cache_root, year=2021, archive_root=None):
     source_root = ARCHIVE_ROOT if archive_root is None else Path(archive_root)
     files = [str(annual_tile(year, tile, cache_root, source_root)) for tile in _tiles_for_bounds(west, south, east, north)]
     virtual = gdal.BuildVRT("", files)
+    if virtual is None:
+        raise RuntimeError("MOD16 verified rasters could not be opened as a mosaic")
     warped = gdal.Warp("", virtual, format="MEM", dstSRS="EPSG:4326", outputBounds=[west, south, east, north],
                        width=nx, height=ny, resampleAlg="average", srcNodata=float("nan"), dstNodata=float("nan"))
+    if warped is None:
+        raise RuntimeError("MOD16 mosaic could not be regridded")
     values = warped.ReadAsArray()
+    if values is None:
+        raise RuntimeError("MOD16 regridded raster could not be decoded")
+    warped = virtual = None
     # Require nearly complete native ET support independently of model support.
     reference = np.where(values[1] >= .9 - 1e-10, values[0], np.nan)
     patch = {"lat": lat, "lon": lon, "lat_bounds": cell_bounds(lat), "lon_bounds": cell_bounds(lon),

@@ -1,5 +1,7 @@
 import datetime as dt
 import tempfile
+import json
+import hashlib
 import unittest
 from unittest.mock import patch
 from pathlib import Path
@@ -7,7 +9,7 @@ import zipfile
 
 import numpy as np
 
-from result_analysis.mod16 import decode_et, unique_granule, annual_tile, _gdal
+from result_analysis.mod16 import decode_et, unique_granule, annual_tile, _gdal, _write_verified_raster, CACHE_PROTOCOL
 
 
 class Mod16Tests(unittest.TestCase):
@@ -66,6 +68,48 @@ class Mod16Tests(unittest.TestCase):
                     self.assertEqual(values[0, 0, 0], expected)
                     self.assertTrue(np.isnan(values[0, 0, 1]))
                     self.assertEqual(values[1, 0, 1], 0)
+                    status = json.loads(file.with_name("complete.json").read_text())
+                    self.assertEqual(status["sha256"], hashlib.sha256(file.read_bytes()).hexdigest())
+                    self.assertEqual(status["cache_protocol"], CACHE_PROTOCOL)
+                    self.assertTrue(status["full_readback_verified"])
+                    with patch("result_analysis.mod16._read_granule", side_effect=AssertionError("Unexpected rebuild")):
+                        self.assertEqual(annual_tile(year, "h19v04", directory), file)
+
+    def test_compressed_multiband_writer_is_closed_and_decodes_before_return(self):
+        gdal = _gdal()
+        from osgeo import osr
+        reference = osr.SpatialReference(); reference.ImportFromEPSG(4326)
+        geometry = ((0, .01, 0, 1, 0, -.01), reference.ExportToWkt(), (512, 512))
+        rng = np.random.default_rng(42)
+        bands = [rng.normal(size=geometry[2]) for _ in range(4)]
+        bands[0][0, 0] = np.nan
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "staging.tif"
+            digest = _write_verified_raster(path, geometry, bands, ["a", "b", "c", "d"], {"test": "yes"})
+            self.assertEqual(digest, hashlib.sha256(path.read_bytes()).hexdigest())
+            published = path.with_name("published.tif"); path.replace(published)
+            ds = gdal.Open(str(published)); actual = ds.ReadAsArray(); ds = None
+            np.testing.assert_array_equal(actual, np.asarray(bands, np.float32))
+            self.assertEqual(digest, hashlib.sha256(published.read_bytes()).hexdigest())
+
+    def test_failed_readback_cannot_publish_completion(self):
+        from osgeo import osr
+        reference = osr.SpatialReference(); reference.ImportFromEPSG(4326)
+        geometry = ((0, .01, 0, 1, 0, -.01), reference.ExportToWkt(), (2, 2))
+        def identify(day, tile, root):
+            return {"day": str(day), "tile": tile}
+        def read(record, temporary):
+            day = dt.date.fromisoformat(record["day"])
+            return (np.ones((2, 2)), np.ones((2, 2), bool), np.zeros((2, 2), np.uint8), geometry,
+                    {"RANGEBEGINNINGDATE": str(day), "RANGEENDINGDATE": str(min(day+dt.timedelta(days=7),dt.date(2015,12,31)))})
+        with tempfile.TemporaryDirectory() as folder:
+            with patch("result_analysis.mod16.unique_granule", side_effect=identify), \
+                 patch("result_analysis.mod16._read_granule", side_effect=read), \
+                 patch("result_analysis.mod16._write_verified_raster", side_effect=RuntimeError("decode error")):
+                with self.assertRaisesRegex(RuntimeError, "decode error"):
+                    annual_tile(2015, "h19v04", folder)
+            self.assertFalse(list(Path(folder).rglob("complete.json")))
+            self.assertFalse(list(Path(folder).rglob("annual_et.tif")))
 
 
 if __name__ == "__main__":

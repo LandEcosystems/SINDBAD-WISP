@@ -52,6 +52,22 @@ The annual cache stores annual ET, complete-year validity, strict-input-QC
 fraction and missing-QC fraction. It also records all granules, source identity,
 decoded ET/QC checksums, actual composite dates and cache checksum.
 
+### Concurrent cache publication
+
+Each source tile/year is protected by an exclusive filesystem lock. The cache
+writer releases every GDAL band and dataset handle before reading the staging
+raster back in full. All four decoded bands must match their intended float32
+arrays, including missing values, before atomic publication and its completion
+record. The checksum is calculated only after these handles are closed.
+
+The `closed-gdal-handles-full-readback-v2` protocol has its own cache identity;
+older derived caches are retained for audit and are not reused by this writer.
+This corrects a publication hazard in the first writer, whose retained final
+band could keep a compressed TIFF open after its completion checksum was saved.
+Native MOD16 observations and all SINDBAD simulations remain read-only. A new
+comparison code identity causes affected reference summaries to be recalculated;
+the completed numerical analysis does not need to be repeated.
+
 ## Comparison support
 
 The model's complete calendar-year ET daily sum is compared with the annual reference.
