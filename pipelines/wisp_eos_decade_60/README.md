@@ -1,3 +1,7 @@
+> Operational update: two concurrent cubes, up to 120 two-process CPU jobs in total,
+> with a 2 TiB combined input budget. See [DUAL120.md](DUAL120.md).
+> The 60-job settings below describe each lane and the original single-lane deployment.
+
 # WISP EOS: decade inference with at most 60 CPU jobs
 
 This directory records the operational pipeline used to prepare and predict one
