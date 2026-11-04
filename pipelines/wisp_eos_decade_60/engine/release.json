@@ -1,0 +1,18 @@
+{
+  "created": "2026-11-04T16:43:37.933604+00:00",
+  "files": {
+    "README_EN.md": "d344676d3bcaa95da0751575fce36497a35cb394faeca9fe002b1d6111b41543",
+    "controller.py": "035c43a656f853e4064e10045b8ab99e7540dacab48aea446bc454b378d37a81",
+    "job.sh": "dabd89abe2862d1d865a707afcad65dafebbdfcf791c1c04fcf300623bd34f31",
+    "migrate.py": "4fde5d59faa99d502bf17fec72ad5d1a36f638d34e66e5deae512bfac22ec431",
+    "products.py": "01132c995b0796745ca393d0c7d68efc8b3b7435a0298cd181c5d0727c97aadb",
+    "quiesce.py": "5b6d9a886ec3e68e8bd8d79b7f21b7d7200a50d7d57dcce569bbd2dc76253686",
+    "reader.py": "8a575d5040d72ae7ee23596a524240ebe8252f9b17788adb113876a5f5f5712e",
+    "runtime.py": "98d7b92f8b0706d705cf9fb3469b25bc0da03721cdda5cf2008c63f4bfe077d9",
+    "test_migration.py": "83af23dad9f536f4961fe8c547170b13b56c36875e94f91f4b2acf89474e5574",
+    "test_products.py": "5755b0bee0607e61bd63b2ace706fff1ad10b16c787d445f87b6102ccaf95217",
+    "test_runtime.py": "d2432d078189f50a2b58f1d53911148dcdc0bda3f117c90b663226d3af1fa062"
+  },
+  "schema": 1,
+  "scientific_modules_modified": false
+}

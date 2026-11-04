@@ -1,0 +1,355 @@
+{
+  "additional_count": 15,
+  "campaign_id": "granada_plus15_20261104",
+  "catalog_sha256": "c676233406743823e17b475a40e9ebae435679885783f5d200ab47744ff84be6",
+  "created_utc": "2026-11-04T22:27:15.864693+00:00",
+  "end_exclusive": "2024-01-01",
+  "engine_release_sha256": "013d133ae0c73ff092ff1961c8632bac14af9961e57d7fe9679f3671c1ef80ee",
+  "first_decade_end_to_end_validated_at_freeze": false,
+  "initial_cube": "T000830",
+  "original_order_sha256": "05e673f85424f95600be6a52e356910efe357b85184060c3cd4bdce3d3573db6",
+  "records": [
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830.json",
+      "administrative_region": "Granada",
+      "center_lat": 36.945945945945944,
+      "center_lon": -3.2972972972972965,
+      "country": "Spain",
+      "country_iso3": "ESP",
+      "cube_acceptance_sha256": "7151156401f01fe0e39eadb9d4bc15a47b8eeb6b61a0f3a7f45de8f26118022d",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830_frozen_v1/daily_master_dev_v5_B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830_frozen_v1.nc",
+      "cube_sha256": "0b57e93402dd5d35b2f35f826bca996b948f68e3b97559d11c14fb22ee41a3dd",
+      "cube_stat": {
+        "bytes": 401719353,
+        "mtime_ns": 1793605816114480469,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830_frozen_v1/daily_master_dev_v5_B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830_frozen_v1.nc"
+      },
+      "nearest_place": "Granada",
+      "region_id": "B1_ESP_Granada_near-Granada_36.9459N_003.2973W_T0830",
+      "token": "T000830"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001.json",
+      "administrative_region": "Suss-Massa-Draa",
+      "center_lat": 30.216216216216218,
+      "center_lon": -8.91891891891892,
+      "country": "Morocco",
+      "country_iso3": "MAR",
+      "cube_acceptance_sha256": "e71b806ed2f2be1e756985cdcb81a2660261c9872e82219254f8eb7acf6349bf",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001_frozen_v1.nc",
+      "cube_sha256": "ba6c3cb0c30ecfa1a3195ec99a365fe53be4a910d5925656cfaa524a38f79d66",
+      "cube_stat": {
+        "bytes": 409246990,
+        "mtime_ns": 1793684090674836497,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001_frozen_v1.nc"
+      },
+      "nearest_place": "Agadir",
+      "region_id": "B1_MAR_Suss-Massa-Draa_near-Agadir_30.2162N_008.9189W_T0001",
+      "token": "T000001"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008.json",
+      "administrative_region": "Suss-Massa-Draa",
+      "center_lat": 30.216216216216218,
+      "center_lon": -5.891891891891891,
+      "country": "Morocco",
+      "country_iso3": "MAR",
+      "cube_acceptance_sha256": "4333c2aa466bc75bb59960dec662a97a32f69749579c0ba2a79f4c5ff0148ebe",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008_frozen_v1.nc",
+      "cube_sha256": "d6dbd71e75ccbed815b38a8b7544c35a4d399e80ffce3d064652196f07fe724e",
+      "cube_stat": {
+        "bytes": 363915992,
+        "mtime_ns": 1793736790251285352,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008_frozen_v1.nc"
+      },
+      "nearest_place": "Errachidia",
+      "region_id": "B1_MAR_Suss-Massa-Draa_near-Errachidia_30.2162N_005.8919W_T0008",
+      "token": "T000008"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025.json",
+      "administrative_region": "Giza",
+      "center_lat": 30.216216216216218,
+      "center_lon": 30.86486486486487,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "c30aabd4ee4208d5519e3be4e8e39b675659cd570a79d3444eb0aee08fc18e6e",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025_frozen_v1/daily_master_dev_v5_B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025_frozen_v1.nc",
+      "cube_sha256": "843a984c5629a3489829abcf860008589da3c265c71cc735d5d7e1e1901ca793",
+      "cube_stat": {
+        "bytes": 355363892,
+        "mtime_ns": 1793664227085599266,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025_frozen_v1/daily_master_dev_v5_B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025_frozen_v1.nc"
+      },
+      "nearest_place": "Giza",
+      "region_id": "B1_EGY_Giza_near-Giza_30.2162N_030.8649E_T0025",
+      "token": "T000025"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026.json",
+      "administrative_region": "Cairo",
+      "center_lat": 30.216216216216218,
+      "center_lon": 31.729729729729733,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "73ffa6d5448b2984c81d51c2a565c09d1bb4abd650ffa59f5c0adc5d71b974e1",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026_frozen_v1/daily_master_dev_v5_B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026_frozen_v1.nc",
+      "cube_sha256": "dd02385f972021a998b8abc91555ba257f9a26fb4fb16745dbdbf3af87d86189",
+      "cube_stat": {
+        "bytes": 372954177,
+        "mtime_ns": 1793684358725149170,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026_frozen_v1/daily_master_dev_v5_B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026_frozen_v1.nc"
+      },
+      "nearest_place": "Zagazig",
+      "region_id": "B1_EGY_Cairo_near-Zagazig_30.2162N_031.7297E_T0026",
+      "token": "T000026"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027.json",
+      "administrative_region": "Suez",
+      "center_lat": 30.216216216216218,
+      "center_lon": 32.16216216216216,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "f48a492af8a705b81d9d4615cdbc14b72c6ff504cbc095ddbec3cc6148b22db4",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027_frozen_v1/daily_master_dev_v5_B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027_frozen_v1.nc",
+      "cube_sha256": "310975a91f7c4ea2f8bf199c0d5275a8983d38ae0740ddb23e01887c41cc09fc",
+      "cube_stat": {
+        "bytes": 365884245,
+        "mtime_ns": 1793683859273888941,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027_frozen_v1/daily_master_dev_v5_B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027_frozen_v1.nc"
+      },
+      "nearest_place": "Ismailia",
+      "region_id": "B1_EGY_Suez_near-Ismailia_30.2162N_032.1622E_T0027",
+      "token": "T000027"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048.json",
+      "administrative_region": "Suss-Massa-Draa",
+      "center_lat": 30.64864864864865,
+      "center_lon": -8.054054054054054,
+      "country": "Morocco",
+      "country_iso3": "MAR",
+      "cube_acceptance_sha256": "13970357385590638dff9d44287bb6ef7aa8f0776fbe7ce55cc04779eff8dece",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048_frozen_v1.nc",
+      "cube_sha256": "455dd7e32ed39bf5d2b07a640b30b55706a26b0f19deba03410bef92a5f18c22",
+      "cube_stat": {
+        "bytes": 405410825,
+        "mtime_ns": 1793595946370698085,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048_frozen_v1.nc"
+      },
+      "nearest_place": "Marrakesh",
+      "region_id": "B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_008.0541W_T0048",
+      "token": "T000048"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052.json",
+      "administrative_region": "Suss-Massa-Draa",
+      "center_lat": 30.64864864864865,
+      "center_lon": -6.324324324324325,
+      "country": "Morocco",
+      "country_iso3": "MAR",
+      "cube_acceptance_sha256": "60a7bc3fb2e4ca0c06bc5b5ae6325beaa69c5a1ff9ff11af6110407f8707a075",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052_frozen_v1.nc",
+      "cube_sha256": "2bd3bafb5908b1c75806d11eb24934d66dedcb214deaac5ec7e89afa816c5c97",
+      "cube_stat": {
+        "bytes": 373956779,
+        "mtime_ns": 1793591299514537951,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052_frozen_v1/daily_master_dev_v5_B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052_frozen_v1.nc"
+      },
+      "nearest_place": "Marrakesh",
+      "region_id": "B1_MAR_Suss-Massa-Draa_near-Marrakesh_30.6486N_006.3243W_T0052",
+      "token": "T000052"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074.json",
+      "administrative_region": "Ismailia",
+      "center_lat": 30.64864864864865,
+      "center_lon": 32.5945945945946,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "b4227f86b931fdcb3bde5673bc771411a134b2350fc31dc7d54e4b16d177ba28",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074_frozen_v1/daily_master_dev_v5_B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074_frozen_v1.nc",
+      "cube_sha256": "e8226e3e299f070ddccf83f036eb51650e82c92d81f1ccd92a78e68e05205c24",
+      "cube_stat": {
+        "bytes": 357593502,
+        "mtime_ns": 1793791511375001860,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074_frozen_v1/daily_master_dev_v5_B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074_frozen_v1.nc"
+      },
+      "nearest_place": "Ismailia",
+      "region_id": "B1_EGY_Ismailia_near-Ismailia_30.6486N_032.5946E_T0074",
+      "token": "T000074"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078.json",
+      "administrative_region": "Ma'an",
+      "center_lat": 30.64864864864865,
+      "center_lon": 36.48648648648649,
+      "country": "Jordan",
+      "country_iso3": "JOR",
+      "cube_acceptance_sha256": "41d94003ff84a17dd46a373f35a8e923faae9ec22b4dfc77ba7b3010559c08cd",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078_frozen_v1/daily_master_dev_v5_B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078_frozen_v1.nc",
+      "cube_sha256": "7dfadf9ddbd032d72c11cb985fecbeb6c8baaf96a7f7332b89a0751f06a89862",
+      "cube_stat": {
+        "bytes": 365019333,
+        "mtime_ns": 1793747672835257068,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078_frozen_v1/daily_master_dev_v5_B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078_frozen_v1.nc"
+      },
+      "nearest_place": "Tafilah",
+      "region_id": "B1_JOR_Ma-an_near-Tafilah_30.6486N_036.4865E_T0078",
+      "token": "T000078"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084.json",
+      "administrative_region": "Ouargla",
+      "center_lat": 30.7027027027027,
+      "center_lon": 6.648648648648649,
+      "country": "Algeria",
+      "country_iso3": "DZA",
+      "cube_acceptance_sha256": "1db23b530affaf3b4d8e03c68c19f10d1f91091cd50a6961529c67967c8d6a5c",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084_frozen_v1/daily_master_dev_v5_B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084_frozen_v1.nc",
+      "cube_sha256": "5b3ce616c6f63a00f033090ee4ff927e3c75b3ab8b160df787d225ec99ba4016",
+      "cube_stat": {
+        "bytes": 314396405,
+        "mtime_ns": 1793718637144573951,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084_frozen_v1/daily_master_dev_v5_B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084_frozen_v1.nc"
+      },
+      "nearest_place": "Hassi Messaoud",
+      "region_id": "B1_DZA_Ouargla_near-Hassi-Messaoud_30.7027N_006.6486E_T0084",
+      "token": "T000084"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094.json",
+      "administrative_region": "North Sinai",
+      "center_lat": 30.972972972972972,
+      "center_lon": 33.91891891891892,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "975b8f478f8f0dea25d6c49272bf848ebf8be5c39b96d088c332abbed6e55313",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094_frozen_v1/daily_master_dev_v5_B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094_frozen_v1.nc",
+      "cube_sha256": "2aa26b8d59fb35d85f55ea42708d8c630eaafe8f85c1c6616830be51a4defb99",
+      "cube_stat": {
+        "bytes": 371912281,
+        "mtime_ns": 1793660475227953259,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094_frozen_v1/daily_master_dev_v5_B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094_frozen_v1.nc"
+      },
+      "nearest_place": "Arish",
+      "region_id": "B1_EGY_North-Sinai_near-Arish_30.9730N_033.9189E_T0094",
+      "token": "T000094"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109.json",
+      "administrative_region": "Mekn\u00e8s-Tafilalet",
+      "center_lat": 31.08108108108108,
+      "center_lon": -5.027027027027026,
+      "country": "Morocco",
+      "country_iso3": "MAR",
+      "cube_acceptance_sha256": "a6cafa76b29ee1e7fbd232fa788ad0dc2ba7c1746787ac815566e39570e631cc",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109_frozen_v1/daily_master_dev_v5_B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109_frozen_v1.nc",
+      "cube_sha256": "e37429fe41ed8db19fd26fe596659c5ca16d7c26041fbe55966042c179cc5c70",
+      "cube_stat": {
+        "bytes": 366073808,
+        "mtime_ns": 1793591300894518666,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109_frozen_v1/daily_master_dev_v5_B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109_frozen_v1.nc"
+      },
+      "nearest_place": "Errachidia",
+      "region_id": "B1_MAR_Meknes-Tafilalet_near-Errachidia_31.0811N_005.0270W_T0109",
+      "token": "T000109"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116.json",
+      "administrative_region": "B\u00e9char",
+      "center_lat": 31.08108108108108,
+      "center_lon": -2.0,
+      "country": "Algeria",
+      "country_iso3": "DZA",
+      "cube_acceptance_sha256": "41c255c2360b3facfe4a09872e75f43aa6254dcf4ff242cd689853ce4885574c",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116_frozen_v1/daily_master_dev_v5_B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116_frozen_v1.nc",
+      "cube_sha256": "361c5647bcb0e5e12a8f9264b95da07328b19c63ef305ecc19ce1a14123e21a6",
+      "cube_stat": {
+        "bytes": 341204115,
+        "mtime_ns": 1793660474492060513,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116_frozen_v1/daily_master_dev_v5_B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116_frozen_v1.nc"
+      },
+      "nearest_place": "B\u00e9char",
+      "region_id": "B1_DZA_Bechar_near-Bechar_31.0811N_002.0000W_T0116",
+      "token": "T000116"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124.json",
+      "administrative_region": "Beheira",
+      "center_lat": 31.08108108108108,
+      "center_lon": 30.432432432432435,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "30626246cdb75ce02a10600a4f758f27c94cba7a1df55e7843484a2d95721f7a",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124_frozen_v1/daily_master_dev_v5_B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124_frozen_v1.nc",
+      "cube_sha256": "0f00a89adbe5d2e16561b4cc190628d12f5229af1894466c2936c978f1659a5f",
+      "cube_stat": {
+        "bytes": 370803039,
+        "mtime_ns": 1793708990065951559,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124_frozen_v1/daily_master_dev_v5_B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124_frozen_v1.nc"
+      },
+      "nearest_place": "Damanhur",
+      "region_id": "B1_EGY_Beheira_near-Damanhur_31.0811N_030.4324E_T0124",
+      "token": "T000124"
+    },
+    {
+      "acceptance_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/reports/acceptance/B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125.json",
+      "administrative_region": "Kafr el-Sheikh",
+      "center_lat": 31.08108108108108,
+      "center_lon": 30.86486486486487,
+      "country": "Egypt",
+      "country_iso3": "EGY",
+      "cube_acceptance_sha256": "9487c47bef7a08797d68c17d4fd90aaf776aad1a878c675df596b79a105f3a5d",
+      "cube_path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125_frozen_v1/daily_master_dev_v5_B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125_frozen_v1.nc",
+      "cube_sha256": "63ec945caad9334c66c7c4737e90ead15fd2a0b223ba8f7d26251b7334118486",
+      "cube_stat": {
+        "bytes": 357152447,
+        "mtime_ns": 1793553346085928065,
+        "path": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/shift_v3_60km/cubes/B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125_frozen_v1/daily_master_dev_v5_B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125_frozen_v1.nc"
+      },
+      "nearest_place": "Kafr el-Sheikh",
+      "region_id": "B1_EGY_Kafr-el-Sheikh_near-Kafr-el-Sheikh_31.0811N_030.8649E_T0125",
+      "token": "T000125"
+    }
+  ],
+  "resources": {
+    "all_jobs_max": 120,
+    "cpu_jobs_max": 60,
+    "cpu_per_job": 4,
+    "gpu": "A100",
+    "gpu_batch_size": 8,
+    "memory_gib_per_job": 16,
+    "partitions": [
+      "work",
+      "small",
+      "gpu"
+    ],
+    "producers_per_job": 2
+  },
+  "run_root": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/wisp_eos_cube_first_v1",
+  "schema": 1,
+  "scientific_deployment_sha256": "4ad3ce1f0eb29be9de9d561ae1b8a63287b1e57a4143407057035189a03172dc",
+  "selection": "Current cube first; next already enrolled and accepted cubes in the existing frozen catalog order; no outcome-based selection",
+  "start": "2014-01-12",
+  "tokens": [
+    "T000830",
+    "T000001",
+    "T000008",
+    "T000025",
+    "T000026",
+    "T000027",
+    "T000048",
+    "T000052",
+    "T000074",
+    "T000078",
+    "T000084",
+    "T000094",
+    "T000109",
+    "T000116",
+    "T000124",
+    "T000125"
+  ],
+  "verified_inputs": "Original acceptance plus exact NetCDF SHA256 and size/mtime checked for all selected cubes"
+}
