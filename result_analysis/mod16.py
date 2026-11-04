@@ -9,12 +9,15 @@ and date is rechecked at runtime. Missing or ambiguous years remain explicit.
 from __future__ import annotations
 
 import datetime as dt
-import fcntl
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
+import socket
 import tempfile
+import time
+import uuid
 import zipfile
 
 import numpy as np
@@ -26,7 +29,41 @@ ARCHIVE_ROOT = Path(os.environ.get("WISP_ANALYSIS_MOD16_ARCHIVE", "configured_so
 GUIDE = "https://www.earthdata.nasa.gov/s3fs-public/2025-04/MOD16_User_Guide_V61.pdf"
 SPECIFICATION = "https://ladsweb.modaps.eosdis.nasa.gov/filespec/MODIS/61/MOD16A2GF_c61"
 POLICY = "valid-range 46-composite annual total; preserve input QC diagnostics; no implicit latest-version selection"
-CACHE_PROTOCOL = "closed-gdal-handles-full-readback-v2"
+CACHE_PROTOCOL = "cross-node-mkdir-closed-readback-v3"
+
+
+@contextmanager
+def _cache_lock(folder, timeout=900.0, poll=0.5):
+    """Coordinate nodes using atomic directory creation, not local-only flock.
+
+    Never steal an old lock based on age: an interrupted builder requires an
+    operator to verify that its recorded job is no longer running. A timeout
+    fails explicitly and leaves all other writers and their files untouched.
+    """
+    lock = Path(folder) / "build.lockdir"
+    token = uuid.uuid4().hex
+    started = time.monotonic()
+    while True:
+        try:
+            lock.mkdir()
+            break
+        except FileExistsError:
+            if time.monotonic() - started >= timeout:
+                raise TimeoutError("MOD16 cross-node cache lock timed out: " + str(lock))
+            time.sleep(poll)
+    try:
+        (lock / "owner.json").write_text(json.dumps({"token": token,
+            "host": socket.gethostname(), "pid": os.getpid(),
+            "slurm_job_id": os.environ.get("SLURM_JOB_ID"),
+            "created_utc": dt.datetime.now(dt.timezone.utc).isoformat()}) + "\n")
+        yield
+    finally:
+        owner = lock / "owner.json"
+        if owner.exists():
+            if json.loads(owner.read_text()).get("token") != token:
+                raise RuntimeError("MOD16 cache lock ownership changed; refusing cleanup")
+            owner.unlink()
+        lock.rmdir()
 
 
 def _gdal():
@@ -172,8 +209,7 @@ def annual_tile(year, tile, cache_root, archive_root=ARCHIVE_ROOT):
                                   "policy": POLICY, "cache_protocol": CACHE_PROTOCOL})
     folder = Path(cache_root) / str(year) / tile / fingerprint
     folder.mkdir(parents=True, exist_ok=True)
-    with (folder / "build.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with _cache_lock(folder):
         output, done = folder / "annual_et.tif", folder / "complete.json"
         if done.exists():
             status = json.loads(done.read_text())
@@ -202,7 +238,9 @@ def annual_tile(year, tile, cache_root, archive_root=ARCHIVE_ROOT):
                 qc_missing_count += (qc == 255).astype(np.uint8)
                 evidence.append(item)
         valid = count == len(days)
-        temp = output.with_name("annual_et.partial.tif")
+        # Unique staging names also prevent accidental shared-file writes if
+        # the coordination protocol is misconfigured or interrupted.
+        temp = output.with_name("annual_et." + uuid.uuid4().hex + ".partial.tif")
         bands = [np.where(valid, total, np.nan), valid.astype(float), strict_count / len(days), qc_missing_count / len(days)]
         names = ["Annual ET (mm), all 46 composites required", "Complete-year ET area validity", "Fraction with strict input QC", "Fraction with missing inherited input QC"]
         digest = _write_verified_raster(temp, geometry, bands, names,

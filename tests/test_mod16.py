@@ -9,10 +9,30 @@ import zipfile
 
 import numpy as np
 
-from result_analysis.mod16 import decode_et, unique_granule, annual_tile, _gdal, _write_verified_raster, CACHE_PROTOCOL
+from result_analysis.mod16 import decode_et, unique_granule, annual_tile, _gdal, _write_verified_raster, _cache_lock, CACHE_PROTOCOL
 
 
 class Mod16Tests(unittest.TestCase):
+    def test_directory_lock_excludes_second_writer_without_stealing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            owner = Path(folder) / "build.lockdir" / "owner.json"
+            with _cache_lock(folder):
+                initial = owner.read_text()
+                with self.assertRaises(TimeoutError):
+                    with _cache_lock(folder, timeout=0.01, poll=0.005):
+                        self.fail("Second writer entered the protected section")
+                self.assertEqual(owner.read_text(), initial)
+            self.assertFalse(owner.parent.exists())
+            with _cache_lock(folder):
+                self.assertNotEqual(owner.read_text(), initial)
+
+    def test_directory_lock_releases_after_builder_error(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with self.assertRaisesRegex(RuntimeError, "builder failed"):
+                with _cache_lock(folder):
+                    raise RuntimeError("builder failed")
+            self.assertFalse((Path(folder) / "build.lockdir").exists())
+
     def test_scale_and_missing_are_not_zeros(self):
         raw = np.array([0, 100, -10, 32700, 32761, 32767], np.int16)
         values, strict = decode_et(raw, np.zeros(raw.shape, np.uint8))

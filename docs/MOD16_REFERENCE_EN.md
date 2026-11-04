@@ -54,16 +54,24 @@ decoded ET/QC checksums, actual composite dates and cache checksum.
 
 ### Concurrent cache publication
 
-Each source tile/year is protected by an exclusive filesystem lock. The cache
+Each source tile/year is protected by atomic directory creation. An actual
+two-node test showed that the scratch filesystem's advisory `flock` did not
+exclude a writer on another node; same-node tests were insufficient. Directory
+creation did exclude the second node. The lock records its host, process, job
+and unique owner token; waiting times out explicitly, and stale locks are never
+stolen automatically. An operator must verify the owner has stopped before
+recovering an interrupted lock. Each writer also uses a unique staging filename.
+The cache
 writer releases every GDAL band and dataset handle before reading the staging
 raster back in full. All four decoded bands must match their intended float32
 arrays, including missing values, before atomic publication and its completion
 record. The checksum is calculated only after these handles are closed.
 
-The `closed-gdal-handles-full-readback-v2` protocol has its own cache identity;
+The `cross-node-mkdir-closed-readback-v3` protocol has its own cache identity;
 older derived caches are retained for audit and are not reused by this writer.
-This corrects a publication hazard in the first writer, whose retained final
-band could keep a compressed TIFF open after its completion checksum was saved.
+It retains the second writer's explicit GDAL-handle closure and full readback,
+and corrects the remaining cross-node coordination hazard. In the first writer,
+a retained final band could also keep a TIFF open after its checksum was saved.
 Native MOD16 observations and all SINDBAD simulations remain read-only. A new
 comparison code identity causes affected reference summaries to be recalculated;
 the completed numerical analysis does not need to be repeated.
