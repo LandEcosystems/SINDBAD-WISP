@@ -88,7 +88,7 @@ def main():
     for f in lockfiles:
         dest = b / 'locks' / f.name
         if not dest.exists():
-            dest.symlink_to(f)
+            os.link(str(f), str(dest))
     atomic(out / 'shared_index_locks.json', {f.name: str(f) for f in lockfiles})
     with rt.Queue(config).edit() as old:
         if any(t.get('lease') and t['region'] in lanes['b'] for t in old['tasks'].values()):

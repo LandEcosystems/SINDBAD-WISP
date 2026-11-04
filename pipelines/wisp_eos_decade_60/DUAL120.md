@@ -67,3 +67,17 @@ worker progress are checked separately in the deployment audit.
 No claim is made that twice the concurrent CPU work halves either cube's wall
 time: shared storage throughput can limit speed. Completion time must follow
 measured progress, especially the slowest month.
+
+## Recovering an index-lock access failure
+
+Transient ENXIO errors were observed when B workers opened the shared index-lock
+path. A later probe on an affected node succeeded; the exact filesystem cause
+was not established. `repair_index_links.py` converts the B symlinks into hard
+links to the same source inodes, without recreating source locks or interrupting
+lock holders. It requeues only unowned tasks matching the recorded error.
+
+`resume_failed_months.py` can replace failed child capacity while its sibling is
+still working. This one-shot recovery may temporarily exceed 60 parent jobs in
+one lane, but always holds the global submission lock and stays within **120
+CPU jobs across both lanes**. It submits at most one job per two queued months.
+No extra cube is activated and no input data is deleted. Error logs are retained.
