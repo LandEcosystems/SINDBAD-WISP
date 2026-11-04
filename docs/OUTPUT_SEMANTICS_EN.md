@@ -202,6 +202,7 @@ time support, grouping, region count and area/mask convention.
 |---|---|---|
 | Scenario scatter / density hexbin | Paired region-year or explicitly labelled pixel values | Scenario agreement and departures from the 1:1 line; no observational validation |
 | Reference scatter / density hexbin | A reference-resolution cell and matching time interval | Agreement with that product on common support, not truth at 375 m |
+| Reference-only model-grid atlas | Archived reference means copied to model centres, alongside original source-cell indices | Display only; the source grid remains coarse and no new fine-resolution pairs or metrics are created |
 | Violin + box + region points | Region-year values or paired differences | Heterogeneity among analysed regions; not an independent-pixel confidence interval |
 | Geographic value/difference map | Real coordinates and their analysed support | Where responses occur; interpolation does not add evidence |
 | Seasonal / annual series | Area-aware means or complete-period flux integrals, explicitly labelled | Seasonal structure and interannual change; 2014 is incomplete |
@@ -214,6 +215,14 @@ they do not receive a fabricated smooth density or correlation. Overall, pyrome,
 vegetation, original IGBP and model-PFT outputs are kept separate, with additional
 combined panels. Reference products share some training/remote-sensing lineage
 with SINDBAD, so agreement is not fully independent validation.
+
+The reference-only atlas uses the first three accepted regions in stable ID
+order. Each map states the actual archived period and source comparison-grid
+resolution; repeated scenario-identical reference maps are shown once. Actual
+coarse source-cell IDs remain in a companion CSV. The atlas includes available
+finite reference values even when formal coverage thresholds reject a pair,
+and is kept separate from the 90% coverage-gated comparison metrics. It does
+not compare partial-period reference means with unmatched ten-year model means.
 
 Exploratory response tests use an approximate centered two-way bootstrap of
 2-degree spatial blocks and complete years (2,000 resamples, seed 42). A

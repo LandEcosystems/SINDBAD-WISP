@@ -1086,6 +1086,109 @@ def _reference_figures(root, out, pdf, figures, accepted_region_ids=None):
     return rows
 
 
+def _model_grid_reference_figures(root, out, pdf, figures, accepted_region_ids):
+    """Display archived reference values on model centres, never as fine-grid pairs."""
+    import numpy as np
+    import pandas as pd
+    plt = _set_style()
+    atlas, audit, source_cells = defaultdict(list), [], []
+    for rid in sorted(accepted_region_ids)[:3]:
+        candidates = (root / "regions" / rid / "references", root / "references" / rid)
+        directory = next((p for p in candidates if (p / "model_grid_reference_display.npz").is_file()), None)
+        if directory is None:
+            audit.append(dict(region_id=rid, status="missing_model_grid_display"))
+            continue
+        source = directory / "model_grid_reference_display.npz"
+        metadata = read_json(directory / "model_grid_reference_display.json", [])
+        # Period and resolution belong to this product's actual archived support.
+        support = {}
+        pair_path = directory / "reference_pairs.csv.gz"
+        if pair_path.is_file():
+            columns = ["product", "variable", "scenario", "carbon_fraction", "period_start", "period_end",
+                       "reference_lat_min", "reference_lat_max", "reference_lon_min", "reference_lon_max"]
+            for chunk in pd.read_csv(pair_path, usecols=columns, chunksize=50_000):
+                chunk["carbon_fraction"] = chunk["carbon_fraction"].fillna("not_applicable").astype(str)
+                for key, rows in chunk.groupby(["product", "variable", "scenario", "carbon_fraction"], dropna=False):
+                    item = support.setdefault(tuple(map(str, key)), dict(start="9999", end="0000", lat_step=[], lon_step=[]))
+                    item["start"] = min(item["start"], str(rows["period_start"].min()))
+                    item["end"] = max(item["end"], str(rows["period_end"].max()))
+                    item["lat_step"].extend(np.unique(np.round(rows["reference_lat_max"] - rows["reference_lat_min"], 9)).tolist())
+                    item["lon_step"].extend(np.unique(np.round(rows["reference_lon_max"] - rows["reference_lon_min"], 9)).tolist())
+        with np.load(source, allow_pickle=False) as data:
+            lat, lon = np.asarray(data["lat"], float), np.asarray(data["lon"], float)
+            runmask = np.asarray(data["run_valid_mask"], bool)
+            seen = {}
+            ordered = sorted(metadata, key=lambda m: (m["product"], m["variable"], str(m["carbon_fraction"]), m["scenario"] != "No_Fire", m["scenario"]))
+            for item in ordered:
+                name = item["array"]
+                raw = np.asarray(data[name], float)
+                ids = np.asarray(data[name + "_source_cell_id"], np.int64)
+                if raw.shape != (len(lat), len(lon)) or ids.shape != raw.shape or runmask.shape != raw.shape:
+                    raise ValueError("Model-grid reference display geometry mismatch: " + rid)
+                fraction = str(item.get("carbon_fraction", "")).strip()
+                if fraction in ("", "None", "nan"):
+                    fraction = "not_applicable"
+                key = (str(item["product"]), str(item["variable"]), fraction)
+                previous = seen.get(key)
+                if previous is not None and np.array_equal(previous[0], raw, equal_nan=True) and np.array_equal(previous[1], ids):
+                    audit.append(dict(region_id=rid, product=key[0], variable=key[1], carbon_fraction=key[2],
+                                      scenario=item["scenario"], status="identical_reference_map_shown_once", source=str(source)))
+                    continue
+                seen[key] = (raw, ids)
+                valid = runmask & np.isfinite(raw) & (ids >= 0)
+                if not valid.any():
+                    audit.append(dict(region_id=rid, product=key[0], variable=key[1], scenario=item["scenario"], status="no_finite_display_values"))
+                    continue
+                unique_ids = np.unique(ids[valid])
+                index = np.full(raw.shape, np.nan)
+                index[valid] = np.searchsorted(unique_ids, ids[valid]) + 1
+                for number, cell_id in enumerate(unique_ids, 1):
+                    source_cells.append(dict(region_id=rid, product=key[0], variable=key[1], carbon_fraction=key[2],
+                                             scenario=item["scenario"], display_index=number, source_cell_id=int(cell_id)))
+                info = support.get((*key[:2], str(item["scenario"]), key[2]), {})
+                a = sorted(set(info.get("lat_step", []))); b = sorted(set(info.get("lon_step", [])))
+                resolution = f"{a[0]:g}° × {b[0]:g}°" if len(a) == len(b) == 1 else "see source support table"
+                scenario_note = "shared reference" if previous is None else str(item["scenario"]) + " distinct reference support"
+                group_key = key if previous is None else (*key, str(item["scenario"]))
+                atlas[group_key].append(dict(region_id=rid, lat=lat, lon=lon, values=np.where(valid, raw, np.nan),
+                                            indices=index, source_count=len(unique_ids), units=item["units"], resolution=resolution,
+                                            period_start=info.get("start", "not recorded"), period_end=info.get("end", "not recorded"),
+                                            scenario=scenario_note, source=str(source), array=name))
+                audit.append(dict(region_id=rid, product=key[0], variable=key[1], carbon_fraction=key[2], scenario=item["scenario"],
+                                  status="displayed_only", array=name, source=str(source), source_cells=len(unique_ids),
+                                  source_grid_resolution=resolution, period_start=info.get("start"), period_end=info.get("end"),
+                                  interpretation="Reference means over available archived periods; no fine-resolution model pairing or metrics"))
+    _write_rows(out / "model_grid_reference_display_audit.csv", audit)
+    _write_rows(out / "model_grid_reference_source_cell_ids.csv", source_cells)
+    for key, records in atlas.items():
+        finite = np.concatenate([r["values"][np.isfinite(r["values"])] for r in records])
+        low, high = float(finite.min()), float(finite.max())
+        if low == high:
+            high = low + max(1., abs(low)*.01)
+        fig, axes = plt.subplots(len(records), 2, figsize=(11.7, 3.7*len(records)+1.4), squeeze=False, layout="constrained")
+        for row, record in enumerate(records):
+            ax, idax = axes[row]
+            artist = ax.pcolormesh(record["lon"], record["lat"], record["values"], shading="auto", cmap="cividis", vmin=low, vmax=high, rasterized=True)
+            fig.colorbar(artist, ax=ax, shrink=.75, label=record["units"])
+            idartist = idax.pcolormesh(record["lon"], record["lat"], record["indices"], shading="auto", cmap="tab20", rasterized=True)
+            fig.colorbar(idartist, ax=idax, shrink=.75, label="Categorical source-cell index; actual IDs in CSV")
+            ax.set_title(f"Region {row+1}: reference mean on model centres\n{record['period_start']} to {record['period_end']}", fontsize=10)
+            idax.set_title(f"Region {row+1}: {record['source_count']} original reference cells\nSource comparison grid: {record['resolution']}", fontsize=10)
+            for axis in (ax, idax):
+                axis.set(xlabel="Longitude (°E)", ylabel="Latitude (°N)")
+                axis.set_aspect(1./max(.1, math.cos(math.radians(float(record["lat"].mean())))))
+        cf = "" if key[2] == "not_applicable" else f" · carbon fraction {key[2]}"
+        fig.suptitle(f"{key[1]} | {key[0]}{cf}\nReference-only model-grid display — no added spatial information", fontsize=13)
+        text = ("Reference pixels are copied to model centres, without interpolation or additional observations. All finite available reference periods are shown; "
+                "the 90% coverage gate applies to separate formal comparisons, not this display. No comparison to unmatched model ten-year means. Regions: "
+                + "; ".join(r["region_id"] for r in records))
+        fig.supxlabel(textwrap.fill(text, 145), fontsize=7)
+        _save_figure(fig, out / "figures" / "model_grid_reference_display" / slug("__".join(key)), pdf, figures,
+                     dict(kind="model_grid_reference_display", variable=key[1], reference_product=key[0], carbon_fraction=key[2],
+                          source="model_grid_reference_display_audit.csv", source_cell_ids="model_grid_reference_source_cell_ids.csv",
+                          region_ids=[r["region_id"] for r in records], metrics_generated=False))
+
+
 def _common_gpp_figure(root, out, pdf, figures, accepted_region_ids=None):
     import numpy as np
     import pandas as pd
@@ -1415,6 +1518,7 @@ def generate(root: str | Path, snapshot: Any = None, max_components: int | None 
         if max_components is None:
             _science_figures(annual, regions, out, pdf, figures)
         reference_metrics = _reference_figures(root, out, pdf, figures, {p.name for p in regions})
+        _model_grid_reference_figures(root, out, pdf, figures, {p.name for p in regions})
         status["reference_comparisons"] = len(reference_metrics)
         _text_page(pdf, "Interpretation and next checks", [
             "Component plots are systematic evidence, not automatically discoveries. A scientific finding needs paired support, "
@@ -1482,7 +1586,7 @@ def _write_markdown(out: Path, status: dict) -> None:
         lines.append("")
     lines += ["## Scientific response and reference comparisons", ""]
     for item in figures:
-        if item["kind"] in ("block_year_effects", "carbon_flux_decomposition", "fire_aligned_recovery", "stock_endpoints", "native_reference_comparison", "environment_response"):
+        if item["kind"] in ("block_year_effects", "carbon_flux_decomposition", "fire_aligned_recovery", "stock_endpoints", "native_reference_comparison", "environment_response", "model_grid_reference_display", "common_annual_gpp_comparison"):
             png, pdf = Path(item["png"]).relative_to(out), Path(item["pdf"]).relative_to(out)
             title = item["kind"].replace("_", " ") + " — " + item.get("variable", "")
             lines += [f"### {title}", "", f"![{title}]({png.as_posix()})", "",

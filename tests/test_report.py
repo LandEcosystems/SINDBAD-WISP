@@ -185,6 +185,45 @@ class TableTest(unittest.TestCase):
 
 @unittest.skipUnless(HAS_NUMPY and HAS_PANDAS and HAS_MATPLOTLIB, "Plotting stack required")
 class RenderingTest(unittest.TestCase):
+    def test_reference_model_grid_atlas_preserves_coarse_ids_without_new_metrics(self):
+        import numpy as np
+        import pandas as pd
+        import matplotlib
+        matplotlib.use("Agg")
+        from matplotlib.backends.backend_pdf import PdfPages
+        from result_analysis.report import _model_grid_reference_figures
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder); out = root / "report"; out.mkdir()
+            directory = root / "regions" / "A" / "references"; directory.mkdir(parents=True)
+            values = np.array([[1., 1.], [2., 2.]])
+            ids = np.array([[101, 101], [202, 202]])
+            np.savez(directory / "model_grid_reference_display.npz", lat=[40., 40.02], lon=[3., 3.02],
+                     run_valid_mask=np.ones((2, 2), bool), display_00=values, display_01=values,
+                     display_00_source_cell_id=ids, display_01_source_cell_id=ids)
+            meta = [dict(array=f"display_{i:02d}", product="TEST.061", variable="gpp", scenario=scenario,
+                         carbon_fraction="", units="gC m-2 day-1")
+                    for i, scenario in enumerate(("No_Fire", "VIIRS_Fire"))]
+            (directory / "model_grid_reference_display.json").write_text(json.dumps(meta))
+            rows = [dict(product="TEST.061", variable="gpp", scenario=scenario, carbon_fraction="not_applicable",
+                         period_start="2015-01-01", period_end="2015-02-01", reference_lat_min=40., reference_lat_max=40.05,
+                         reference_lon_min=3., reference_lon_max=3.05) for scenario in ("No_Fire", "VIIRS_Fire")]
+            pd.DataFrame(rows).to_csv(directory / "reference_pairs.csv.gz", index=False, compression="gzip")
+            figures = []
+            with PdfPages(out / "atlas.pdf") as pdf:
+                _model_grid_reference_figures(root, out, pdf, figures, {"A", "B", "C", "D"})
+            self.assertEqual(len(figures), 1)
+            self.assertFalse(figures[0]["metrics_generated"])
+            self.assertTrue(Path(figures[0]["png"]).is_file())
+            source_ids = pd.read_csv(out / "model_grid_reference_source_cell_ids.csv")
+            self.assertEqual(list(source_ids.source_cell_id), [101, 202])
+            audit = pd.read_csv(out / "model_grid_reference_display_audit.csv")
+            self.assertEqual(set(audit.region_id), {"A", "B", "C"})
+            self.assertIn("identical_reference_map_shown_once", set(audit.status))
+            displayed = audit[audit.status == "displayed_only"].iloc[0]
+            self.assertEqual(displayed.period_start, "2015-01-01")
+            self.assertEqual(displayed.source_grid_resolution, "0.05° × 0.05°")
+            self.assertFalse((out / "reference_metrics_all_pairs.csv").exists())
+
     def test_product_dots_preserve_full_scenario_figure_identity(self):
         import matplotlib
         matplotlib.use("Agg")
