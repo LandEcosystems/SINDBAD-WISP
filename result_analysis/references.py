@@ -1011,6 +1011,14 @@ def compare_region(summary_path, output_dir, config=None):
     with xr.open_dataset(summary_path) as ds:
         region_id = str(ds.attrs.get("region_id", Path(summary_path).parent.name))
         ds.attrs["region_id"] = region_id  # in-memory only; source NetCDF stays read-only
+        # Compact summaries are small; load each used compressed variable once.
+        # Otherwise a 230-period GPP chunk is decompressed for each single period.
+        needed=("gpp_modis_sum","gpp_monthly_sum","nee_monthly_sum",
+                "evapotranspiration_monthly_sum","transpiration_monthly_sum",
+                "cVegWood_annual_mean","evapotranspiration__evapotranspiration_annual")
+        for name in needed:
+            if name in ds:
+                ds[name]=ds[name].load()
         adapters = [("MOD17A2HGF.061", lambda: mod17_pairs(ds, region_id, template, years)),
                     ("ESA_CCI_Biomass_v6", lambda: cci_pairs(ds, region_id, cfg.get("cci_path", CCI_PATH)))]
         if mod16_enabled:
