@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "source_root": "${SINDBAD_RESULTS_ROOT}",
+  "batch_root": "${SINDBAD_BATCH_ROOT}",
+  "output_root": "${SINDBAD_ANALYSIS_ROOT}",
+  "source_geometry": "${WISP_ANALYSIS_GEOMETRY}",
+  "pyrome_path": "${WISP_ANALYSIS_PYROME}",
+  "mod17_template": "${SINDBAD_MOD17_TEMPLATE}",
+  "cci_path": "${SINDBAD_CCI_BIOMASS_PATH}",
+  "scenarios": ["No_Fire", "VIIRS_Fire"],
+  "date_start": "2014-01-12",
+  "date_end": "2023-12-31",
+  "expected_days": 3641,
+  "quantization_bits": 14,
+  "budget_model_tolerance": 0.01,
+  "seed": 42,
+  "bootstrap_replicates": 2000,
+  "max_parallel_regions": 8,
+  "reference_coverage": [0.9, 0.8],
+  "analysis_scope": "interim completed subset; not a design-unbiased Mediterranean total"
+}
