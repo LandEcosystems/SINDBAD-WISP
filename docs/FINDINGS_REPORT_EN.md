@@ -59,6 +59,15 @@ CCI matches woody carbon rather than total vegetation carbon. The 0.51 carbon
 fraction is sensitivity, not an uncertainty interval. LAI cannot be validated
 because it was not saved/enabled in this experiment.
 
+An additional exploratory screen identifies common reference cell-years where
+both GPP references exceed 1,000 g C m−2 yr−1 while both model aggregates are
+below 200. It checks the corresponding no-fire values and shows full common-cell
+annual series for the two cubes with the most such pairs. These thresholds
+identify diagnostic cases, not exclusion criteria or proof of an input error.
+The two selected Nile Delta cubes warrant baseline checks, separately from the
+three fire-response cases. Source hashes and snapshot identity bind this screen
+to the rest of the report.
+
 ## Commands
 
 Use the frozen analysis environment and set the analysis root externally:
@@ -68,7 +77,9 @@ python -m result_analysis.findings_report "$ANALYSIS_ROOT" component --index 0
 python -m result_analysis.findings_report "$ANALYSIS_ROOT" discovery
 python -m result_analysis.findings_report "$ANALYSIS_ROOT" reference
 python -m result_analysis.findings_report "$ANALYSIS_ROOT" groups
+python -m result_analysis.findings_report "$ANALYSIS_ROOT" anomalies
 python -m result_analysis.findings_report "$ANALYSIS_ROOT" brief
+python -m result_analysis.validate_findings_report "$ANALYSIS_ROOT"
 ```
 
 Components can run as a 58-element Slurm array with 32 concurrent tasks. Each

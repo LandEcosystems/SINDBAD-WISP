@@ -421,6 +421,52 @@ def group_atlases(root):
     return records
 
 
+def reference_anomalies(root):
+    """Exploratory discrepancy screen, separate from fire-response case selection."""
+    out=destination(root);source=out/'references/common_gpp_annual_pairs.parquet'
+    f=pd.read_parquet(source)
+    key=['scenario','year','lat_key','lon_key']
+    a=f[f['product'].eq('FLUXCOM-X_X-BASE_v1.0')]
+    b=f[f['product'].eq('MOD17A2HGF.061')]
+    paired=a.merge(b,on=key,suffixes=('_flux','_modis'),validate='one_to_one')
+    threshold=(paired.model_flux<200)&(paired.model_modis<200)&(paired.reference_flux>1000)&(paired.reference_modis>1000)
+    flagged=paired[threshold & paired.scenario.eq('VIIRS_Fire')].copy()
+    flagged.to_csv(out/'references/gpp_discrepancy_screen.csv.gz',index=False,compression='gzip')
+    rank=flagged.groupby('region_id_flux').agg(n_cell_years=('year','size'),
+        model_gpp=('model_flux','mean'),fluxcom_gpp=('reference_flux','mean'),modis_gpp=('reference_modis','mean')).sort_values('n_cell_years',ascending=False)
+    rank.to_csv(out/'references/gpp_discrepancy_regions.csv')
+    nf=paired[paired.scenario.eq('No_Fire')][['year','lat_key','lon_key','model_flux']]
+    match=flagged.merge(nf,on=['year','lat_key','lon_key'],suffixes=('','_no_fire'),validate='one_to_one')
+    plt=old._set_style();fig,axes=plt.subplots(1,2,figsize=(13,5.5),squeeze=False)
+    rows=[]
+    for ax,rid in zip(axes.flat,rank.head(2).index):
+        d=f[f.region_id.eq(rid)].copy()
+        for product,scenario,column,color,marker,title in [
+            ('MOD17A2HGF.061','No_Fire','model',COLORS[0],'o','SINDBAD: No fire'),
+            ('MOD17A2HGF.061','VIIRS_Fire','model',COLORS[1],'s','SINDBAD: VIIRS fire'),
+            ('MOD17A2HGF.061','VIIRS_Fire','reference','#8A813F','^','MOD17'),
+            ('FLUXCOM-X_X-BASE_v1.0','VIIRS_Fire','reference','#B4678C','D','FLUXCOM-X')]:
+            v=d[d['product'].eq(product)&d.scenario.eq(scenario)].groupby('year')[column].mean()
+            ax.plot(v.index,v.values,color=color,marker=marker,ms=4,label=title)
+            rows.extend(dict(region_id=rid,year=int(y),series=title,mean_annual_gpp=float(x)) for y,x in v.items())
+        ax.set_title(case_name(rid),loc='left',fontsize=11);ax.set_ylabel('Mean annual GPP (g C m⁻² yr⁻¹)')
+        ax.set_xticks([2015,2017,2019,2021]);ax.set_ylim(bottom=0);ax.grid(alpha=.18)
+    axes[0,0].legend(frameon=False,fontsize=8)
+    fig.suptitle('Two Nile Delta cubes warrant a baseline-model check',x=.08,ha='left',fontsize=16)
+    fig.text(.08,.025,'Same coarse GPP cells and complete years, equally weighted within cube. Both fire scenarios are shown; reference estimates are not truth.\nCases selected by the most cell-years with model <200 and both references >1,000 g C m⁻² yr⁻¹. Diagnostic thresholds, not pass/fail rules.',fontsize=8)
+    fig.subplots_adjust(left=.08,right=.98,top=.83,bottom=.20,wspace=.27)
+    stem=out/'references/gpp_baseline_cases';savefig(fig,stem)
+    pd.DataFrame(rows).to_csv(out/'references/gpp_baseline_case_series.csv',index=False)
+    state=dict(status='complete',snapshot=snapshot(root)['fingerprint'],
+        source_sha256=file_hash(source),n_flagged=len(flagged),n_total=int(paired.scenario.eq('VIIRS_Fire').sum()),
+        n_regions=int(flagged.region_id_flux.nunique()),n_unique_cells=len(flagged[['lat_key','lon_key']].drop_duplicates()),
+        same_cells_low_without_fire=int((match.model_flux_no_fire<200).sum()),
+        case_ids=rank.head(2).index.tolist(),pdf=str(stem.with_suffix('.pdf')),
+        interpretation='Baseline discrepancy, not proof of its cause; land-cover/support, water inputs and parameterization need checking')
+    old.atomic_json(out/'reference_anomalies_complete.json',state)
+    return state
+
+
 def brief(root):
     from matplotlib.backends.backend_pdf import PdfPages
     p=snapshot(root);out=destination(root)
@@ -436,6 +482,10 @@ def brief(root):
     rm=pd.read_csv(out/'references/common_gpp_metrics.csv');rvi=rm[rm.scenario.eq('VIIRS_Fire')]
     native=pd.read_csv(out/'references/annual_reference_metrics.csv')
     ev=native[(native.variable.eq('evapotranspiration'))&native.scenario.eq('VIIRS_Fire')&native.group_type.eq('overall')]
+    anomaly=json.loads((out/'reference_anomalies_complete.json').read_text()) if (out/'reference_anomalies_complete.json').exists() else None
+    if anomaly and (anomaly.get('snapshot') != p['fingerprint'] or
+                    anomaly.get('source_sha256') != file_hash(out/'references/common_gpp_annual_pairs.parquet')):
+        raise ValueError('Anomaly diagnostic belongs to another snapshot or source')
     findings=[
         f"Fire responses are local: {100*disc['fire_affected_fraction']:.2f}% of analysed owned area has at least one VIIRS forcing day. In those cells, mean vegetation carbon is {abs(affected.loc['cVeg','relative_change_pct']):.1f}% lower, compared with {abs(exposure[(exposure.cohort=='all')&(exposure.variable=='cVeg')].iloc[0].relative_change_pct):.2f}% over all analysed land (full saved period).",
         f"Small average GPP changes coexist with larger local stock losses. Mean annual GPP changes from {overall.loc['gpp','No_Fire']:.1f} to {overall.loc['gpp','VIIRS_Fire']:.1f} g C m−2 yr−1 ({overall.loc['gpp','relative_change_pct']:+.3f}%; 2015–2023). The three selected high-response cubes end 2023 with {abs(cases.iloc[0].final_cVeg_relative_pct):.1f}%, {abs(cases.iloc[1].final_cVeg_relative_pct):.1f}% and {abs(cases.iloc[2].final_cVeg_relative_pct):.1f}% less vegetation carbon.",
@@ -443,6 +493,8 @@ def brief(root):
     ]
     reflines=[f"{x['product']}: annual GPP bias {x['bias']:+.0f}, RMSE {x['rmse']:.0f} g C m−2 yr−1; r={x['r']:.2f}; {int(x['n']):,} common cell-year pairs." for _,x in rvi.iterrows()]
     reflines += [f"{x['product']}: annual ET bias {x['bias']:+.0f}, RMSE {x['rmse']:.0f} mm yr−1; r={x['r']:.2f}; {int(x['n']):,} product-specific cell-year pairs." for _,x in ev.iterrows()]
+    baseline_line = (f"Baseline diagnostic: {anomaly['n_flagged']:,} common cell-year pairs have model GPP <200 while both references exceed 1,000 g C m−2 yr−1. All {anomaly['same_cells_low_without_fire']:,} remain low without fire. Concentrations in two Nile Delta cubes warrant checks of spatial support, land cover, water inputs and parameters; the cause is not yet established."
+        if anomaly else 'Baseline-model discrepancies and fire-forcing responses must be diagnosed separately.')
     opening=out/'FINDINGS_SUMMARY_EN.pdf'
     with PdfPages(opening) as pdf:
         old._text_page(pdf,'Fire effects are concentrated; regional averages hide local losses',findings+[
@@ -450,12 +502,13 @@ def brief(root):
             'No_Fire and VIIRS_Fire use common weather, initialization and static cover. VIIRS is an active-fire proxy with a 0.99 forcing multiplier, not measured burned-area fraction. No genuine WISP forecast scenario is included.'])
         old._text_page(pdf,'Reference agreement and questions for the next experiment',reflines+[
             'Model outputs are aggregated to reference support. Fine-grid display maps do not add independent observations. Shared coarse cells and years are used for the GPP source comparison; product-specific valid-area masks may still differ.',
-            'Research question: how much of the persistent carbon response comes from reduced photosynthetic uptake, and how much is offset by reduced respiration? The present accounting separates these components; it does not identify a universal fire mechanism.',
+            baseline_line,
             'Next verification: test the strongest cases against independent burned-area and biomass changes, and check sensitivity to the 0.99 forcing assumption and repeated VIIRS detections. Do not interpret multiple detection days as separate wildfire events.',
             'LAI was not saved and its module was not enabled; no simulated-LAI validation is reported. Original PFT parameter maps, saved run code, and the output semantics guide take precedence over stale README statements.'])
     chosen=[out/'components/gpp__gpp/absolute_pyrome.pdf',out/'components/gpp__gpp/absolute_vegetation.pdf',
             out/'components/cEco__cVeg/absolute_pyrome.pdf',out/'components/evapotranspiration__evapotranspiration/absolute_pyrome.pdf']
-    pages=parallel.merge_pdfs([opening]+chosen+[Path(x) for x in disc['figures']]+[Path(x) for x in ref['figures']],out/'SUPERVISOR_BRIEF_EN.pdf')
+    extra=[Path(anomaly['pdf'])] if anomaly else []
+    pages=parallel.merge_pdfs([opening]+chosen+[Path(x) for x in disc['figures']]+[Path(x) for x in ref['figures']]+extra,out/'SUPERVISOR_BRIEF_EN.pdf')
     case_table=cases[['region_id','final__cVeg__No_Fire','final__cVeg__VIIRS_Fire','final_cVeg_relative_pct','fire_affected_fraction']].copy()
     lines=['# Fire responses are concentrated; regional averages hide local losses','','## Executive summary','']
     lines += ['- '+x for x in findings]
@@ -495,6 +548,12 @@ def brief(root):
         '- Longer-lived carbon deficits and uptake/respiration compensation are testable model hypotheses here. Their novelty relative to the literature has not been established.', '',
         'Source interpretation: [output dictionary](../OUTPUT_SEMANTICS_EN.md); [code and parameter provenance](../dependency_audit.json). Figure values and source fingerprints are saved alongside each component and in `references/complete.json`.', '',
         'Reference methods: [FLUXCOM-X X-BASE, Nelson et al.](https://bg.copernicus.org/articles/21/5079/2024/); [MOD17 C6.1](https://doi.org/10.5067/MODIS/MOD17A2HGF.061); [CCI Biomass v6 manual](https://climate.esa.int/media/documents/D4.3_CCI_PUG_V6.0_20250606.pdf).']
+    if anomaly:
+        lines += ['', '## A baseline discrepancy worth investigating','',
+            f"An exploratory screen found {anomaly['n_flagged']:,} of {anomaly['n_total']:,} common GPP cell-year pairs ({100*anomaly['n_flagged']/anomaly['n_total']:.2f}%) with model GPP below 200 while both references exceed 1,000 g C m⁻² yr⁻¹. These span {anomaly['n_unique_cells']} coarse cells and {anomaly['n_regions']} cubes. {anomaly['same_cells_low_without_fire']:,} of the same pairs are also below 200 in No_Fire, so fire forcing is not sufficient to explain the discrepancy.", '',
+            '![Two baseline diagnostic cases](references/gpp_baseline_cases.png)','',
+            'The two largest concentrations are in Nile Delta cubes. Examine land-cover and area support, water inputs (including whether irrigation is represented), initialization and parameter choices. These are hypotheses for diagnosis, not established explanations or grounds to discard the cubes.', '',
+            '[Screened pairs](references/gpp_discrepancy_screen.csv.gz) · [Region rankings](references/gpp_discrepancy_regions.csv) · [Series values](references/gpp_baseline_case_series.csv)']
     (out/'SUPERVISOR_BRIEF_EN.md').write_text('\n'.join(lines)+'\n')
     state=dict(snapshot=p['fingerprint'],status='complete',pages=pages,primary_regions=p['primary_regions'],
         component_count=len(p['components']),case_ids=cases.region_id.tolist(),findings=findings,
@@ -505,9 +564,9 @@ def brief(root):
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('root',type=Path)
-    parser.add_argument('stage',choices=['component','discovery','reference','groups','brief']);parser.add_argument('--index',type=int)
+    parser.add_argument('stage',choices=['component','discovery','reference','groups','brief','anomalies']);parser.add_argument('--index',type=int)
     a=parser.parse_args()
-    result=component(a.root,a.index) if a.stage=='component' else {'discovery':discovery,'reference':reference_annual,'groups':group_atlases,'brief':brief}[a.stage](a.root)
+    result=component(a.root,a.index) if a.stage=='component' else {'discovery':discovery,'reference':reference_annual,'groups':group_atlases,'brief':brief,'anomalies':reference_anomalies}[a.stage](a.root)
     print(json.dumps(result))
 
 
