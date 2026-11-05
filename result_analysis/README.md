@@ -112,3 +112,31 @@ See [output semantics](../docs/OUTPUT_SEMANTICS_EN.md),
 * Hypotheses from simulated paired experiments are not observational causal proof.
 
 No source result or user model configuration is changed by this analysis.
+
+## Email figures: all 293 regions, overall and grouped comparisons
+
+After generating the all-293 findings tables, run:
+
+```bash
+python -m result_analysis.email_grouped_comparisons "$SINDBAD_ANALYSIS_ROOT"
+```
+
+This produces a two-page overview and eight detailed comparisons for GPP, cVeg,
+ET and direct fire carbon emission, each shown overall and by pyrome or original
+vegetation class. Both scenarios appear side by side; the detailed figures also
+show paired differences. Outputs are under
+`report_findings_v3_all293/email_section2_grouped_v2/`, with plotted values,
+recomputed group statistics, source hashes, English email text and a ZIP package.
+
+Each point is one region/group's 2015–2023 mean annual value. Fluxes use annual
+totals and cVeg uses annual mean stocks. Distributions weight regions equally;
+diamonds separately show owned-area-weighted means. Mixed regions contribute
+only their corresponding class pixels to each group. No-Fire direct combustion
+is exactly zero; negative net carbon contributions in the case studies describe
+a different quantity. These are descriptive results for the completed cohort,
+not design-weighted Mediterranean totals.
+
+This explicitly requested all-293 view includes the 46 regions with near-zero
+water/ET numerical flags, without altering their original QA or model outputs.
+The figure builder reconciles the summaries, area partitions and paired values
+against the prior all-293 tables before exporting the figures.
