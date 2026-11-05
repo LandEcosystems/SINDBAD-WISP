@@ -82,7 +82,7 @@ def activate(root,token):
     c=region_config(root,token);adapter.activate(c,root)
     return c,adapter
 
-def retire_pending_producers(root,token,current):
+def retire_pending_producers(root,token,current,reason='current wave inputs complete'):
     """Retire only this region's registered, never-started producer allocations.
 
     Slurm checks the state again server-side, so a job that starts between squeue
@@ -103,7 +103,7 @@ def retire_pending_producers(root,token,current):
                        capture_output=True,timeout=30)
         retired.append(jid)
         atomic(receipt,
-               dict(at=now(),token=token,jobs=retired,reason='current wave inputs complete',
+               dict(at=now(),token=token,jobs=retired,reason=reason,
                     scheduler_state_filter='PENDING'))
     return retired
 
@@ -337,6 +337,7 @@ def control(root,once=False):
                         elif not e.get('transient') or e.get('attempts',0)>=3:
                             with state_edit(root) as d:d['regions'][token].update(status='BLOCKED',error=e['error'])
                             (rr/'state/STOP').touch()
+                            retire_pending_producers(root,token,current,reason='region blocked by stage error')
                             continue
                         else:continue
                     blocked=[t for t in s['tasks'].values() if 'blocked' in (t['input_status'],t['prediction_status'])]
@@ -348,7 +349,9 @@ def control(root,once=False):
                     permanent=[t for t in blocked if not t.get('transient') or t.get('attempts',0)>=3]
                     if permanent:
                         with state_edit(root) as d:d['regions'][token].update(status='BLOCKED',error=permanent[0].get('error'))
-                        (rr/'state/STOP').touch();continue
+                        (rr/'state/STOP').touch()
+                        retire_pending_producers(root,token,current,reason='region blocked by task error')
+                        continue
                     if blocked:continue
                     own=[j for j in current if j['token']==token]
                     # Pending workers have never opened inputs. Do not wait for

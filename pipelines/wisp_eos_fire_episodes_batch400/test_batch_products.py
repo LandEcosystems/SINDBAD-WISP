@@ -94,6 +94,16 @@ class BatchProductsTest(unittest.TestCase):
                          cleanup_not_before_epoch=result['completed_epoch'] + 600)
         return result['completed_epoch'] + 601
 
+    def clean_all_inputs(self):
+        for wave_id in (0, 1):
+            with Queue(self.c).edit() as state:
+                state.update(active_wave=wave_id, phase='WAVE_VERIFY', cleanup_authorized=False)
+            later = self.authorize()
+            with patch.object(b.time, 'time', return_value=later):
+                b.cleanup_wave(self.c)
+        with Queue(self.c).edit() as state:
+            state['phase'] = 'MERGE'
+
     def test_wave_validation_is_idempotent_and_does_not_reset_retention(self):
         first = b.verify_wave_outputs(self.c)
         with patch.object(b.time, 'time', return_value=first['completed_epoch'] + 999):
@@ -182,18 +192,19 @@ class BatchProductsTest(unittest.TestCase):
             self.assertEqual(b.cleanup_wave(self.c)['reason'], 'active task lock')
 
     def test_merge_all_waves_after_input_cleanup(self):
-        for wave_id in (0, 1):
-            with Queue(self.c).edit() as state:
-                state.update(active_wave=wave_id, phase='WAVE_VERIFY', cleanup_authorized=False)
-            later = self.authorize()
-            with patch.object(b.time, 'time', return_value=later):
-                b.cleanup_wave(self.c)
+        self.clean_all_inputs()
         result = b.finalize_region(self.c)
         self.assertEqual(result['days'], 9)
         with nc.Dataset(result['path']) as ds:
             self.assertEqual(len(ds.dimensions['time']), 9)
             self.assertEqual(list(ds['episode_id'][:]), [1] * 8 + [2])
         self.assertTrue((self.root / 'reports/final.json').exists())
+        self.assertTrue((self.root / 'reports/final_chunk_cleanup.json').exists())
+        for key in self.keys:
+            self.assertFalse((self.root / 'monthly/REG' / (key + '.nc')).exists())
+            self.assertTrue((self.root / 'manifests/tasks' / key / 'output.json').exists())
+            self.assertTrue((self.root / 'manifests/tasks' / key / 'input_days.json').exists())
+        self.assertEqual(b.finalize_region(self.c), result)
 
     def test_empty_product_preserves_schema_and_has_no_fake_dates(self):
         self.selection([])
@@ -218,7 +229,7 @@ class BatchProductsTest(unittest.TestCase):
             b.empty_result(self.c)
 
     def test_reuse_requires_source_model_grid_and_selection_agreement(self):
-        old_final = b.finalize_region(self.c)
+        old_final = b.p.consolidate(self.c, self.region, self.tasks)
         b.p._atomic(self.root / 'config/deployment.json', self.c)
         new_root = self.fixture.base / 'new'
         new_c = dict(self.c, root=str(new_root), scratch=str(self.fixture.base / 'new-scratch'))
@@ -234,6 +245,63 @@ class BatchProductsTest(unittest.TestCase):
             ds['query_logits'][0, 0, 0] = 123
         with self.assertRaisesRegex(ValueError, 'checksum'):
             b.verify_reuse(self.root, new_c)
+
+    def test_final_chunk_cleanup_rejects_live_inputs_and_active_owners(self):
+        with self.assertRaisesRegex(ValueError, 'input cleanup'):
+            b.finalize_region(self.c)
+        self.clean_all_inputs()
+        tasks = Queue(self.c).snapshot()['tasks']
+        final = b.p.consolidate(self.c, self.region, tasks)
+        with Queue(self.c).edit() as state:
+            state['tasks'][self.keys[0]]['lease'] = 'active-reader'
+        with self.assertRaisesRegex(ValueError, 'no task owners'):
+            b.cleanup_final_chunks(self.c, self.region, tasks, final)
+        self.assertTrue((self.root / 'monthly/REG' / (self.keys[0] + '.nc')).exists())
+
+    def test_final_chunk_cleanup_fails_closed_for_corrupt_prediction(self):
+        self.clean_all_inputs()
+        tasks = Queue(self.c).snapshot()['tasks']
+        final = b.p.consolidate(self.c, self.region, tasks)
+        path = self.root / 'monthly/REG' / (self.keys[1] + '.nc')
+        with nc.Dataset(path, 'a') as ds:
+            ds['query_logits'][0, 0, 0] = 123
+        with self.assertRaisesRegex(ValueError, 'checksum'):
+            b.cleanup_final_chunks(self.c, self.region, tasks, final)
+        self.assertTrue((self.root / 'monthly/REG' / (self.keys[0] + '.nc')).exists())
+        self.assertTrue(Path(final['path']).exists())
+
+    def test_final_chunk_cleanup_refuses_symlinks_and_preserves_external_files(self):
+        self.clean_all_inputs()
+        tasks = Queue(self.c).snapshot()['tasks']
+        final = b.p.consolidate(self.c, self.region, tasks)
+        path = self.root / 'monthly/REG' / (self.keys[0] + '.nc')
+        protected = self.fixture.base / 'protected.nc'
+        path.rename(protected)
+        path.symlink_to(protected)
+        with self.assertRaisesRegex(ValueError, 'Symlink'):
+            b.cleanup_final_chunks(self.c, self.region, tasks, final)
+        self.assertTrue(protected.exists())
+        self.assertTrue(Path(final['path']).exists())
+
+    def test_final_chunk_cleanup_recovers_after_unlink_before_completion_journal(self):
+        self.clean_all_inputs()
+        original = Path.unlink
+        calls = []
+        def interrupted(path, *args, **kwargs):
+            value = original(path, *args, **kwargs)
+            if '/monthly/' in str(path):
+                calls.append(str(path))
+                if len(calls) == 1:
+                    raise OSError('simulated interruption after chunk unlink')
+            return value
+        with patch.object(Path, 'unlink', interrupted), self.assertRaises(OSError):
+            b.finalize_region(self.c)
+        self.assertFalse((self.root / 'reports/final.json').exists())
+        result = b.finalize_region(self.c)
+        self.assertEqual(result['days'], 9)
+        self.assertTrue(Path(result['path']).exists())
+        self.assertTrue(all(not (self.root / 'monthly/REG' / (key + '.nc')).exists() for key in self.keys))
+        self.assertEqual(b.finalize_region(self.c)['sha256'], result['sha256'])
 
     def test_reuse_accepts_changed_global_digest_and_ignores_operational_source_paths(self):
         # Add a second pilot region. Its presence changes all pilot task keys,

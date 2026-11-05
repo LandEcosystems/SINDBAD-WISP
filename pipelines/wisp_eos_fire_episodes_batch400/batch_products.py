@@ -226,8 +226,78 @@ def cleanup_wave(c):
                     wave_receipt_sha256=p._sha(path))
 
 
+def cleanup_final_chunks(c, region, tasks, final):
+    """Remove only registered chunk products after the final file is validated.
+
+    Receipts and input hashes remain durable. An immutable per-file intent makes
+    interruption between unlink and completion journalling safely resumable.
+    Reused pilot files never enter this function.
+    """
+    import adapter
+    root = Path(c['root'])
+    q = adapter.Queue(c)
+    with adapter.locked(root / 'locks/products' / (region['region_id'] + '.lock')):
+        checked = p.validate_final(c, region, tasks)
+        if checked != final:
+            raise ValueError('Final receipt changed before chunk cleanup')
+        expected = {receipt['key']: receipt for receipt in final['chunk_receipts']}
+        if set(expected) != set(tasks):
+            raise ValueError('Final chunk cleanup task set differs')
+        with contextlib.ExitStack() as locks:
+            for key in sorted(expected):
+                locks.enter_context(adapter.locked(root / 'locks/tasks' / (key + '.lock'), False))
+            state = q.snapshot()
+            if state['phase'] not in {'MERGE', 'COMPLETE'} or set(state['tasks']) != set(tasks):
+                raise ValueError('Final chunk cleanup is not authorized by region phase')
+            for key in expected:
+                task = state['tasks'][key]
+                if (task.get('input_status') != 'cleaned' or task.get('prediction_status') != 'done'
+                        or any(task.get(name) is not None for name in ('lease', 'job', 'pid'))):
+                    raise ValueError('Final chunk cleanup requires cleaned inputs and no task owners')
+            plans = []
+            for key, receipt in expected.items():
+                registration = p._registration(c, key)
+                if registration['identity']['region'] != region['region_id']:
+                    raise ValueError('Final cleanup registration belongs to another region')
+                path = root / 'monthly' / region['region_id'] / (key + '.nc')
+                if Path(receipt['path']) != path or path == Path(final['path']):
+                    raise ValueError('Final cleanup references an unauthorized product path')
+                p._owned_path(path, root, must_exist=False)
+                if path.exists() and (not path.is_file() or p._sha(path) != receipt['sha256']):
+                    raise ValueError('Chunk checksum differs before final cleanup: ' + key)
+                meta = root / 'manifests/tasks' / key
+                record = dict(key=key, deleted_path=str(path), region_id=region['region_id'],
+                              chunk_sha256=receipt['sha256'], final_sha256=final['sha256'],
+                              registration_sha256=p._digest(registration))
+                intent = meta / 'final_chunk_cleanup_intent.json'
+                if intent.exists() and p._read(intent) != record:
+                    raise ValueError('Final cleanup identity changed during resume')
+                if not path.exists() and not intent.exists():
+                    raise ValueError('Chunk disappeared without final cleanup intent')
+                plans.append((path, meta, intent, record))
+            for path, meta, intent, record in plans:
+                p._atomic(intent, record)
+                p._owned_path(path, root, must_exist=False)
+                if path.exists():
+                    if p._sha(path) != record['chunk_sha256']:
+                        raise ValueError('Chunk changed during final cleanup')
+                    path.unlink()
+                    fd = os.open(path.parent, os.O_RDONLY)
+                    try:
+                        os.fsync(fd)
+                    finally:
+                        os.close(fd)
+                p._atomic(meta / 'final_chunk_cleanup.json', dict(record, completed=p._now()))
+            # Final checksum is checked after cleanup as well; completion cannot
+            # conceal damage to the only remaining scientific product.
+            p.validate_final(c, region, tasks)
+            report = dict(cleaned=True, chunks=len(plans), final_sha256=final['sha256'], completed=p._now())
+            p._atomic(root / 'reports/final_chunk_cleanup.json', report)
+            return report
+
+
 def finalize_region(c):
-    """Merge all selected dates; chunk predictions survive earlier input cleanup."""
+    """Merge all selected dates, then safely retire intermediate predictions."""
     import adapter
     token, region, manifest = _region(c)
     if not manifest['regions'][token]['selected_dates']:
@@ -237,7 +307,10 @@ def finalize_region(c):
         raise ValueError('Final task set differs from complete region selection')
     if any(t.get('prediction_status') != 'done' for t in tasks.values()):
         raise ValueError('Cannot publish a partially predicted region')
+    if any(t.get('input_status') != 'cleaned' for t in tasks.values()):
+        raise ValueError('Final publication requires completed wave input cleanup')
     receipt = p.consolidate(c, region, tasks)
+    cleanup_final_chunks(c, region, tasks, receipt)
     p._atomic(Path(c['root']) / 'reports/final.json', receipt)
     return receipt
 
