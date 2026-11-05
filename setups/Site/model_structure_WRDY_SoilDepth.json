@@ -156,7 +156,7 @@
       "approach": "Horn"
     },
     "gppVPD": {
-      "approach": "PRELES"
+      "approach": "Farquhar1980"
     },
     "groundWRecharge": {
       "approach": "dos"
@@ -247,7 +247,7 @@
       "approach": "simple"
     },
     "WUE": {
-      "approach": "expVPDDayCo2"
+      "approach": "Farquhar1980"
     }
   },
   "pools": {
