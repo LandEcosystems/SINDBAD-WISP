@@ -429,6 +429,7 @@ for scenario in ("No_Fire", "VIIRS_Fire"):
 
 def package(out):
     from PIL import Image
+    shutil.copy2(__file__, out / "code/entity_case_guide.py")
     figures=pd.read_csv(out/"tables/all_378_figures_explained.csv")
     for f in figures.itertuples():
         with Image.open(out/"guide"/f.relative_path) as im: im.verify()
@@ -438,7 +439,11 @@ def package(out):
     files += [(cube,"input/"+cube.name)]
     files += [(p,"entity/"+RID+"/"+str(p.relative_to(ENTITY))) for p in sorted(ENTITY.rglob("*")) if p.is_file()]
     q=BATCH/"qa"/RID
-    files += [(p,"input_qa/"+str(p.relative_to(q))) for p in sorted(q.rglob("*")) if p.is_file()]
+    # Weather preparation QA contains monthly NetCDF intermediates; the download
+    # needs masks/provenance, not an extra weather dataset alongside the input cube.
+    qa_files = [p for p in q.glob("*") if p.is_file()]
+    qa_files += [p for p in (q / "static").rglob("*") if p.is_file()]
+    files += [(p,"input_qa/"+str(p.relative_to(q))) for p in sorted(qa_files)]
     pr=ENTITY.parent.parent/"pft"
     for p in sorted(pr.glob("params_by_pft_WISP_V1_202610_pft.*")):
         if p.is_file(): files.append((p,"parameters/"+p.name))
