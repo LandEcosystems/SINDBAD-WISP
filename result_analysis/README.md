@@ -46,6 +46,12 @@ The MOD16 adapter also requires GDAL with HDF4 support and a working PROJ databa
 in the audited environment. GDAL is not installed implicitly from pip. Reference
 preparation is a separate array stage; `slurm_finish.sh` only renders the report.
 
+For component-parallel plotting and a concise main report, use
+[Parallel report instructions](../docs/PARALLEL_REPORT_EN.md). This route reuses
+the completed numerical/reference stages and validates existing figure reuse.
+It creates composite component pages and independent group atlases, then merges
+them only after every required worker has succeeded.
+
 Do not overwrite `inventory.json` for an enlarged or changed source snapshot.
 Create a versioned output root, freeze the new inventory, and reuse a region only
 after its source, dependency and scientific-code fingerprints match. This prevents

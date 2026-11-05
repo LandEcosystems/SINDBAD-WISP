@@ -1,0 +1,3 @@
+# Optional isolated report dependencies; do not alter model environments.
+pypdf==6.1.1
+pyarrow>=12
