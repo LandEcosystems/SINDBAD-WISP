@@ -1,0 +1,13 @@
+#!/bin/bash
+# Campaign-only scheduling policy; scientific code and other jobs are unchanged.
+set -euo pipefail
+owned=0
+for arg in "$@"; do
+    case "$arg" in
+        --job-name=w4e-*) owned=1 ;;
+    esac
+done
+if [[ "$owned" == 1 ]]; then
+    exec /usr/bin/sbatch --exclude=node-r6-he05 "$@"
+fi
+exec /usr/bin/sbatch "$@"
