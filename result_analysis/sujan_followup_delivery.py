@@ -18,36 +18,52 @@ from .io import file_hash
 
 
 def reference_figure(out):
+    from matplotlib.colors import LogNorm
+
     pairs=pd.read_csv(out/'reference_annual_pairs_293.csv.gz')
     summary=pd.read_csv(out/'reference_region_means_293.csv')
-    layout=[('gpp','MOD17A2HGF.061','GPP · MODIS','g C m⁻² yr⁻¹'),
-            ('gpp','FLUXCOM-X_X-BASE_v1.0','GPP · FLUXCOM-X','g C m⁻² yr⁻¹'),
-            ('nee','FLUXCOM-X_X-BASE_v1.0','NEE · FLUXCOM-X','g C m⁻² yr⁻¹'),
-            ('evapotranspiration','MOD16A2GF.061','ET · MODIS','mm yr⁻¹'),
-            ('evapotranspiration','FLUXCOM-X_X-BASE_v1.0','ET · FLUXCOM-X','mm yr⁻¹')]
-    plt=_set_style();fig,axes=plt.subplots(2,5,figsize=(19,9))
+    layout=[('gpp','MOD17A2HGF.061','MODIS GPP','g C m⁻² yr⁻¹'),
+            ('gpp','FLUXCOM-X_X-BASE_v1.0','FLUXCOM-X GPP','g C m⁻² yr⁻¹'),
+            ('nee','FLUXCOM-X_X-BASE_v1.0','FLUXCOM-X NEE','g C m⁻² yr⁻¹'),
+            ('evapotranspiration','MOD16A2GF.061','MODIS ET','mm yr⁻¹'),
+            ('evapotranspiration','FLUXCOM-X_X-BASE_v1.0','FLUXCOM-X ET','mm yr⁻¹')]
+    plt=_set_style();fig,axes=plt.subplots(3,5,figsize=(19,13))
+    density_plots=[]
     for j,(var,product,title,unit) in enumerate(layout):
         v=summary[summary.variable.eq(var)&summary['product'].eq(product)]
         for x,(name,color) in enumerate(zip(SCENARIOS+['reference'],SERIES_COLORS)):
             distribution(axes[0,j],v[name],x,color,width=.7)
-        axes[0,j].set_xticks([0,1,2],['No fire','VIIRS\nfire','Reference'],fontsize=9)
+        axes[0,j].set_xticks([0,1,2],['No fire','VIIRS\nfire',title.replace(' ','\n')],fontsize=9)
         axes[0,j].set_title(title+f'\nn={len(v)} cubes',loc='left',fontsize=11)
         axes[0,j].set_ylabel(unit);axes[0,j].grid(axis='y',alpha=.18)
         q=pairs[pairs.variable.eq(var)&pairs['product'].eq(product)]
-        x=q.reference.to_numpy();y=q.VIIRS_Fire.to_numpy();ax=axes[1,j]
-        ax.hexbin(x,y,gridsize=45,mincnt=1,bins='log',cmap='cividis',rasterized=True)
-        lim=[min(x.min(),y.min()),max(x.max(),y.max())];ax.plot(lim,lim,color='#66747A',ls='--',lw=.8)
-        m=basic_metrics(x,y)
-        ax.text(.03,.97,f'n={len(q):,} cell-years\nRMSE={m["rmse"]:.1f}\nr={m["r"]:.2f}',transform=ax.transAxes,va='top',fontsize=9,
-                bbox=dict(facecolor='white',alpha=.85,edgecolor='none',pad=3))
-        ax.set_xlabel('Reference ('+unit+')');ax.set_ylabel('VIIRS-fire SINDBAD ('+unit+')')
-    fig.suptitle('Reference products alongside the two SINDBAD scenarios',x=.055,y=.97,ha='left',fontsize=20,weight='semibold')
-    fig.text(.055,.91,'2015–2021 complete years · frozen 293-region cohort · reference-grid comparisons',fontsize=12)
+        values=q[['reference']+SCENARIOS].to_numpy()
+        assert len(q)>0 and np.isfinite(values).all()
+        low,high=values.min(),values.max();pad=.025*(high-low)
+        lim=(low-pad,high+pad)
+        for row,(scenario,label) in enumerate(zip(SCENARIOS,['No-fire SINDBAD','VIIRS-fire SINDBAD']),start=1):
+            x=q.reference.to_numpy();y=q[scenario].to_numpy();ax=axes[row,j]
+            density_plots.append(ax.hexbin(x,y,gridsize=45,mincnt=1,cmap='cividis',
+                                          extent=(*lim,*lim),rasterized=True))
+            ax.plot(lim,lim,color='#66747A',ls='--',lw=.8)
+            ax.set_xlim(lim);ax.set_ylim(lim)
+            m=basic_metrics(x,y)
+            ax.text(.03,.97,f'n={len(q):,} cell-years\nRMSE={m["rmse"]:.1f}\nr={m["r"]:.2f}',transform=ax.transAxes,va='top',fontsize=9,
+                    bbox=dict(facecolor='white',alpha=.85,edgecolor='none',pad=3))
+            ax.set_xlabel(title+'\n('+unit+')');ax.set_ylabel(label+'\n('+unit+')')
+    norm=LogNorm(vmin=1,vmax=max(float(h.get_array().max()) for h in density_plots))
+    for h in density_plots:h.set_norm(norm)
+    colorbar=fig.colorbar(density_plots[0],cax=fig.add_axes([.77,.095,.21,.012]),orientation='horizontal')
+    colorbar.set_label('Cell-years per hexagon (log scale)',fontsize=9)
+    colorbar.ax.tick_params(labelsize=8)
+    fig.suptitle('SINDBAD scenarios compared with MODIS and FLUXCOM-X',x=.055,y=.97,ha='left',fontsize=20,weight='semibold')
+    fig.text(.055,.93,'2015–2021 complete years · frozen 293-region cohort · matched reference-grid comparisons',fontsize=12)
     fig.text(.055,.02,'Top: each point is a cube’s seven-year mean annual total on matched reference support (distribution, not a confidence interval).\n'
-             'Bottom: one unique reference cell-year; density colour indicates point count. Model aggregated to 0.05° reference support, coverage ≥90%; overlap duplicates removed.\n'
+             'Middle: no-fire SINDBAD. Bottom: VIIRS-fire SINDBAD. One unique reference cell-year per pair; identical axes and bin geometry within each product column.\n'
+             'Model aggregated to 0.05° reference support, coverage ≥90%; overlap duplicates removed. Dashed line: 1:1. Both scenarios use exactly the same paired cells and years.\n'
              'GPP products share coarse cells/years; masks can differ. ET products use their own valid supports. Negative NEE = uptake; direct fire is excluded from NEE.\n'
              'MODIS supplies GPP and ET here, not NEE. ET is water flux, not LE in W m⁻². References are estimates, not ground truth; completion subset is not a Mediterranean total.',fontsize=9)
-    fig.subplots_adjust(left=.055,right=.985,top=.84,bottom=.20,wspace=.5,hspace=.5)
+    fig.subplots_adjust(left=.055,right=.985,top=.865,bottom=.19,wspace=.5,hspace=.6)
     savefig(fig,out/'01_reference_comparisons')
 
 
@@ -98,13 +114,14 @@ def negative_figure(out):
     savefig(fig,out/'04_negative_net_decomposition')
 
 
-def package(root):
+def package(root, reference_only=False):
     out=destination(root)
     states={k:json.loads((out/(k+'_validation.json')).read_text()) for k in ['references','prefire','negative']}
     assert all(s['status']=='pass' for s in states.values())
     reference_figure(out)
-    pft_figure(out)
-    negative_figure(out)
+    if not reference_only:
+        pft_figure(out)
+        negative_figure(out)
     files=[out/(n+'.pdf') for n in ['01_reference_comparisons','02_prefire_stock_by_vegetation','04_negative_net_decomposition']]
     assert merge_pdfs(files,out/'SUJAN_FOLLOWUP_THREE_FIGURES_EN.pdf')==3
     pd.DataFrame([
@@ -139,6 +156,10 @@ with replicated coarse reference values as independent fine pixels. Comparisons
 use complete years 2015–2021 and at least 90% reference-cell support. Overlaps are
 deduplicated by highest coverage and stable region ID, not by model error. GPP
 products share geographic reference cells and years; product masks can differ.
+The figure names each product explicitly. Its top row shows regional distributions,
+its middle row compares No_Fire with that product, and its bottom row compares
+VIIRS_Fire with the same product. Both scatter rows use identical paired records,
+axis limits and hexagon geometry within each column, with one shared count scale.
 
 VIIRS-fire scenario, annual reference-cell statistics:
 
@@ -211,14 +232,17 @@ The 293-region completion subset is not an unbiased Mediterranean total.
 All figures are descriptive model/reference analyses; no new model run is made.
 '''
     (out/'README_EN.md').write_text(text)
+    (out/'delivery.json').write_text(json.dumps(dict(status='pass',figures=4,overview_pdf_pages=3,
+        reference_figure_revision='named_products_and_both_scenario_scatter_rows',
+        renderer_sha256=file_hash(Path(__file__)),extraction_sha256=file_hash(Path(__file__).with_name('sujan_followup.py'))),indent=2)+'\n')
     with zipfile.ZipFile(out/'SUJAN_FOLLOWUP_FIGURES_AND_CSV.zip','w',compression=zipfile.ZIP_DEFLATED) as z:
         for f in sorted(out.iterdir()):
             if f.is_file() and f.suffix in ['.pdf','.png','.csv','.gz','.md','.json']:z.write(f,f.name)
     with zipfile.ZipFile(out/'SUJAN_FOLLOWUP_FIGURES_AND_CSV.zip') as z:assert z.testzip() is None
-    (out/'delivery.json').write_text(json.dumps(dict(status='pass',figures=4,overview_pdf_pages=3,
-        renderer_sha256=file_hash(Path(__file__)),extraction_sha256=file_hash(Path(__file__).with_name('sujan_followup.py'))),indent=2)+'\n')
     print(str(out/'SUJAN_FOLLOWUP_THREE_FIGURES_EN.pdf'))
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('root',type=Path);a=p.parse_args();package(a.root)
+    p=argparse.ArgumentParser();p.add_argument('root',type=Path)
+    p.add_argument('--reference-only',action='store_true',help='Revise the reference figure and package; retain all other figures')
+    a=p.parse_args();package(a.root,reference_only=a.reference_only)

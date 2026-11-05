@@ -32,6 +32,14 @@ their own valid supports. Annual region distributions and native reference-cell
 scatter data are both exported. ET is not relabelled as LE. No MODIS NEE is
 invented. Reference products are estimates, not ground truth.
 
+The delivered comparison figure labels MODIS GPP/ET and FLUXCOM-X GPP/NEE/ET
+explicitly. Regional distributions are followed by separate No_Fire and
+VIIRS_Fire scatter rows, using identical records, axis limits and hexagon bins
+within each product column and a common logarithmic count colour scale.
+To revise only this figure and refresh the combined PDF and package from existing
+CSVs, append `--reference-only` to the delivery command. Other figures and all
+source data remain unchanged.
+
 ## First recorded fire
 
 For each owned, runnable natural-vegetation pixel with first positive VIIRS
