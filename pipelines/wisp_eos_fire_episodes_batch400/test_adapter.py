@@ -1,5 +1,6 @@
 """Operations tests; tiny fake stores never read raw sources or run the model."""
 import copy
+import errno
 import hashlib
 import importlib.util
 import json
@@ -293,6 +294,102 @@ class AdapterTests(unittest.TestCase):
             report = a.verify_wave(self.c)
         self.assertTrue(report['passed'])
         self.assertEqual(verify.call_count, 1)
+
+    def test_scheduler_dead_owners_are_terminal_after_three_failures(self):
+        for index, terminal in enumerate(['TIMEOUT', 'OUT_OF_MEMORY', 'FAILED'], 1):
+            jid = str(100 + index)
+            with mock.patch.dict(os.environ, {'SLURM_JOB_ID': jid}):
+                key, _ = self.q.claim('cpu')
+                response = types.SimpleNamespace(stdout=jid + '|' + terminal + '\n')
+                with mock.patch.object(a.rt.subprocess, 'run', return_value=response):
+                    a.recover(self.c, [])
+            task = self.q.snapshot()['tasks'][key]
+            self.assertEqual(task['attempts'], index)
+            self.assertEqual(task['owner_failure_attempts_by_stage']['cpu'], index)
+            self.assertIsNone(task['lease'])
+            self.assertEqual(task['input_status'], 'blocked' if index == 3 else 'queued')
+        self.assertTrue(task['retry_limit_reached'])
+        self.assertFalse(task['transient'])
+        self.assertIsNone(self.q.claim('cpu'))
+        a.recover(self.c, [])
+        self.assertEqual(self.q.snapshot()['tasks'][key]['attempts'], 3)
+
+    def test_live_scheduler_owner_never_recovered(self):
+        with mock.patch.dict(os.environ, {'SLURM_JOB_ID': '101'}):
+            key, _ = self.q.claim('cpu')
+        running = types.SimpleNamespace(stdout='101|RUNNING\n')
+        with mock.patch.object(a.rt.subprocess, 'run', return_value=running):
+            a.recover(self.c, [])
+        self.assertEqual(self.q.snapshot()['tasks'][key]['input_status'], 'building')
+
+    def test_scheduler_dead_gpu_owner_restores_verified_receipt_without_retry(self):
+        with self.q.edit() as state:
+            state['phase'] = 'PREDICT'
+            state['tasks'][self.keys[0]].update(input_status='ready', input_fingerprint='fake')
+        with mock.patch.dict(os.environ, {'SLURM_JOB_ID': '101'}):
+            key, _ = self.q.claim('gpu')
+        receipt = {'sha256': 'verified-prediction', 'validated': True}
+        self.put('manifests/tasks/' + key + '/output.json', receipt)
+        products = types.ModuleType('products')
+        products.validate_chunk = mock.Mock(return_value={'passed': True})
+        dead = types.SimpleNamespace(stdout='101|FAILED\n')
+        with mock.patch.object(a.rt.subprocess, 'run', return_value=dead), \
+             mock.patch.dict(sys.modules, {'products': products}):
+            a.recover(self.c, [])
+        task = self.q.snapshot()['tasks'][key]
+        self.assertEqual(task['prediction_status'], 'done')
+        self.assertEqual(task['output_sha256'], receipt['sha256'])
+        self.assertEqual(task.get('attempts', 0), 0)
+        self.assertEqual(task['input_status'], 'ready')
+        self.assertGreater(task['reserved'], -1)
+        products.validate_chunk.assert_called_once()
+
+    def gpu_failure_fixture(self, exc, index=0):
+        key = self.keys[index]
+        with self.q.edit() as state:
+            state.update(phase='PREDICT', active_wave=index)
+            state['tasks'][key].update(input_status='ready', prediction_status='queued')
+        before = self.q.snapshot()
+        with mock.patch.dict(os.environ, {'SLURM_JOB_ID': 'gpu101'}):
+            claimed, _ = self.q.claim('gpu')
+            self.assertEqual(claimed, key)
+            # Reproduce the unmodified frozen GPU worker's error update.
+            self.q.update(key, status='blocked', failed_stage='gpu', error=str(exc), job=None, pid=None)
+        affected = a.record_gpu_failure(self.c, exc, before)
+        return key, affected
+
+    def test_gpu_io_failure_is_retryable_and_counts_each_failure(self):
+        exc = OSError(errno.EIO, 'temporary shared-storage I/O failure')
+        for index in range(1, 4):
+            key, affected = self.gpu_failure_fixture(exc)
+            self.assertEqual(affected, [key])
+            task = self.q.snapshot()['tasks'][key]
+            self.assertEqual(task['attempts'], index)
+            self.assertEqual(task['failure_attempts_by_stage']['gpu'], index)
+            self.assertEqual(task['transient'], index < 3)
+            self.assertEqual(self.q.snapshot()['tasks'][self.keys[1]]['prediction_status'], 'queued')
+            with self.q.edit() as state:
+                state['tasks'][key]['retry_after'] = 0
+            a.recover(self.c, [])
+            self.assertEqual(self.q.snapshot()['tasks'][key]['prediction_status'],
+                             'queued' if index < 3 else 'blocked')
+
+    def test_deterministic_gpu_error_is_not_retried(self):
+        key, affected = self.gpu_failure_fixture(ValueError('Prediction outside [0,1]'))
+        self.assertEqual(affected, [key])
+        a.recover(self.c, [])
+        task = self.q.snapshot()['tasks'][key]
+        self.assertFalse(task['transient'])
+        self.assertEqual(task['attempts'], 1)
+        self.assertEqual(task['prediction_status'], 'blocked')
+
+    def test_legacy_cpu_failure_count_cannot_be_hidden_by_scheduler_counter(self):
+        key = self.keys[0]
+        with self.q.edit() as state:
+            state['tasks'][key].update(input_status='blocked', failed_stage='cpu', transient=True,
+                  retry_after=0, attempts=3, failure_attempts_by_stage={'cpu': 1})
+        a.recover(self.c, [])
+        self.assertEqual(self.q.snapshot()['tasks'][key]['input_status'], 'blocked')
 
 
 if __name__ == '__main__':

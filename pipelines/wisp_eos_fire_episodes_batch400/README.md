@@ -8,14 +8,14 @@ are read-only. It does not execute SINDBAD or replace its fire forcing.
 ## What is selected
 
 For each accepted source cube, read `viirs_fire_binary` in the centre
-`[16:112,16:112]`. A date with any pixel equal to1 is an observed fire day.
+`[16:112,16:112]`. A date with any pixel equal to 1 is an observed fire day.
 Missing/nonbinary labels block selection; they never become no fire. The
 accepted VIIRS product already applies the agreed S-NPP quality/type filter
 and the audited NOAA-20 outage replacement.
 
 Expand each observed fire date by five days on either side, union the dates,
-merge adjacent intervals, and clip to **2014-01-12 through2023-12-31**. DateD
-denotes `[D00:00 UTC,D+100:00 UTC)`, without another day shift. Split each
+merge adjacent intervals, and clip to **2014-01-12 through 2023-12-31**. Date D
+denotes `[D 00:00 UTC, (D+1) 00:00 UTC)`, without another day shift. Split each
 continuous episode into balanced chunks of at most seven prediction days.
 Chunks partition the selected dates exactly once. They are scheduling units,
 not a separate seven-day input dataset for each daily prediction.
@@ -23,19 +23,19 @@ not a separate seven-day input dataset for each daily prediction.
 The frozen reader uses `[D−96h,D+24h)` for every selected day. Within a chunk,
 weather and historical fire reuse rolling caches; independent chunks reload
 their initial history. Daily window normalization and tensor assembly remain
-separate. Frozen training mean/std, the full120-hour/native128-square radiation
+separate. Frozen training mean/std, the full 120-hour/native 128×128 radiation
 normalization, both float16 conversions, seven float32 input groups, observed
 VIIRS history, and bfloat16 inference are unchanged. Future fire, FRP and
 vegetation never enter the model. Future ERA5 weather makes this a hindcast.
 
 - Scientific model commit: `482aec67d44caf35b320aaee095a0499e8f92bbf`.
 - Checkpoint SHA256: `efbf7db3208660efba7e98359a6fce5e01c4186f9039395087b3b59a538cccc3`.
-- EOS corrected / Q10 / seed42 / epoch46; batch8 on one A100.
+- EOS corrected / Q10 / seed 42 / epoch 46; batch=8 on one A100.
 
 ## Scheduling and bounded storage
 
 Ten lanes each own one region at a time. Ready regions are ordered by descending
-selected-date count, then stable production tileID. The first two lanes must
+selected-date count, then stable production tile ID. The first two lanes must
 pass actual input/reference and memory qualification before expansion to ten.
 Zero-fire regions publish an audited empty-time NetCDF and use no CPU/GPU
 production workers. The two existing pilot products are reused only after
@@ -61,10 +61,12 @@ changing old controllers, which do not recognize the new job names. The older
 fourteen deferred full-decade regions remain deferred.
 
 The two-lane qualification requires completed short chunks, the two planned
-independent raw-window parity dates per region, and job peakRSS≤12GiB without
-resource errors. The region budget includes reservations, measured scratch and
+independent raw-window parity dates per region, and job peak RSS ≤12 GiB with no unresolved
+resource errors. Recovered transient I/O failures remain in the audit history.
+A blocked initial qualification region stops expansion explicitly; it is not
+silently replaced by a third qualification region. The region budget includes reservations, measured scratch and
 quarantine. CPU workers never delete inputs. If thirty-minute median read
-latency doubles while throughput falls (at least20 dates in each comparison
+latency doubles while throughput falls (at least 20 dates in each comparison
 window), the controller halves the producer ceiling and retires surplus
 workers after their current chunk, recording the adjustment.
 
@@ -76,32 +78,36 @@ Campaign root:
 Scratch:
 `/Net/Groups/BGI/tscratch/ybai/wisp_eos_fire_episodes_batch1_v2`
 
-- `manifests/`: frozen400 catalog, numerical deployment and checked fire-index source.
+- `manifests/`: frozen 400 catalog, numerical deployment and checked fire-index source.
 - `regions/Txxxxxx/manifests/`: per-region selection, waves, input hashes, source and QA identities.
 - `regions/Txxxxxx/outputs/<region>/`: one final sparse-date NetCDF for newly inferred regions.
 - `regions/Txxxxxx/reports/final.json`: validated final pointer, including a reused pilot path when applicable.
-- `outputs/catalog.json`: all400 region statuses, selected dates and final pointers.
+- `outputs/catalog.json`: all 400 region statuses, selected dates and final pointers.
 - `reports/progress.json`: active phases, input/prediction dates, jobs, cache and blockers.
 - `reports/io_monitor.json`: measured read latency and throughput windows.
 - `logs/`: scheduler logs; detailed per-date timing journals stay with each region.
 
-Products preserve real selected dates, UTC bounds, episodeID, central96-square
-score and validity maps, allQ10 points, logits/confidences, and provenance.
+Products preserve real selected dates, UTC bounds, episode ID, central 96×96
+score and validity maps, all Q10 points, logits/confidences, and provenance.
 Empty products explicitly state `no_observed_fire`; no absent date is written
 as a prediction of zero.
 
 Each wave follows `BUILD → INPUT_VERIFY → PREDICT → WAVE_VERIFY → CLEANUP_WAIT`.
 Registered temporary inputs can be removed only after durable chunk predictions
-are reopened/validated, at least600seconds have elapsed, no owner remains, and
+are reopened/validated, at least 600 seconds have elapsed, no owner remains, and
 exclusive task locks are acquired. Input-day hashes and prediction receipts
 remain. After all waves, the region merges and validates its complete selected
 date product. Cleanup never reaches old campaigns or source data. Interrupted
 cleanup resumes safely; completed GPU work is not confused with cached input.
 
-Source-access errors are retried at most three times; deterministic errors block
+Pending producers are retired once their wave inputs are complete, using a
+server-side PENDING-state guard; running workers are not interrupted. Startup,
+worker-owner recovery, and GPU I/O failures have persistent bounded counters.
+
+Source-access errors allow at most three attempts; deterministic errors block
 that region without substitution. A frozen identity change prevents further
 execution. Failed or awaiting regions are not counted as completed. A campaign
-is COMPLETE only when all400 are verified predictions, audited reuse, or
+is COMPLETE only when all 400 are verified predictions, audited reuse, or
 confirmed no-observed-fire products.
 
 ## Deployment and operation
@@ -120,6 +126,13 @@ CAMPAIGN_ROOT/code/run.sh submit-control
 CAMPAIGN_ROOT/code/run.sh status
 ```
 
+Before any input production has been admitted, `upgrade.py --commit COMMIT_SHA`
+can install an operational fix after this campaign’s scanner/controller stop.
+It refuses active jobs or started input work, archives the old immutable release,
+and rebinds only operational identity hashes. Frozen selection, scientific
+configuration, and source records remain unchanged. An interrupted upgrade is
+resumable. Never use this helper to alter a campaign with active producers.
+
 `submit-control` is idempotent while a registered controller exists. The
 controller submits one source scanner, two qualification lanes, and then up to
 ten lanes. It renews before its wall limit. Use the status command or progress
@@ -128,18 +141,18 @@ JSON instead of counting Slurm jobs as completed scientific outputs.
 ## Acceptance and interpretation
 
 All inputs are reread with seven-array hash,shape,dtype and finiteness checks.
-Each region has independent full120-hour reference checks at its first selected
+Each region has independent full 120-hour reference checks at its first selected
 day and a block boundary. Frozen first-day checks at every chunk also verify
 future-input isolation and reference assembly. Each region's first ready wave
-records batch1-repeat versus batch8 numerical differences, explicitly padding
+records batch=1 repeat versus batch=8 numerical differences, explicitly padding
 the gate only when fewer than eight distinct dates exist. GPU batching need not
 be bitwise identical. Final output dates, grids, numerical values, metadata and
 checksums are validated before completion.
 
-The pilot's390 days and two regions are not a representative timing sample of
-all400. Report total selected dates first, then update the remaining-time
-estimate from measured production throughput. The pilot's pure GPU48seconds
-excludes model startup, input construction, validation, outputI/O and queueing.
+The pilot's 390 days and two regions are not a representative timing sample of
+all 400. Report total selected dates first, then update the remaining-time
+estimate from measured production throughput. The pilot's pure GPU 48 seconds
+excludes model startup, input construction, validation, output I/O and queueing.
 
 This is an **observation-conditioned retrospective event experiment**. It
 cannot measure whole-year false-positive rates, full-year CO₂ emissions, or

@@ -82,12 +82,44 @@ def activate(root,token):
     c=region_config(root,token);adapter.activate(c,root)
     return c,adapter
 
+def retire_pending_producers(root,token,current):
+    """Retire only this region's registered, never-started producer allocations.
+
+    Slurm checks the state again server-side, so a job that starts between squeue
+    and scancel is not interrupted. Running workers exit at their checkpoints.
+    """
+    root=Path(root);retired=[];candidates=[]
+    for row in current:
+        if (row.get('kind')!='cpu' or row.get('token')!=token or row.get('state')!='PENDING'
+                or row.get('name')!=PREFIX+'cpu'):continue
+        jid=row['id'];record=read(root/'state/submissions'/(jid+'.json'))
+        if (record.get('kind')!='cpu' or record.get('token')!=token or
+            record.get('name')!=PREFIX+'cpu' or row.get('name')!=record['name']):
+            raise ValueError('Refuse to retire unverified producer '+jid)
+        candidates.append(jid)
+    receipt=root/'reports/job_retirements'/(str(time.time_ns())+'.json')
+    for jid in candidates:
+        subprocess.run(['scancel','--state=PENDING',jid],check=True,text=True,
+                       capture_output=True,timeout=30)
+        retired.append(jid)
+        atomic(receipt,
+               dict(at=now(),token=token,jobs=retired,reason='current wave inputs complete',
+                    scheduler_state_filter='PENDING'))
+    return retired
+
 def cpu_parent(root,token):
     import psutil
     c,ad=activate(root,token)
     from wisp_stream.backend import qualify
     rr=Path(c['root']);jid=os.environ.get('SLURM_JOB_ID','local')
-    atomic(rr/'reports/qualification'/(jid+'.json'),qualify(c))
+    try:
+        qualification=qualify(c)
+        atomic(rr/'reports/qualification'/(jid+'.json'),qualification)
+    except Exception as exc:
+        # No task lease exists yet; persist a stage failure so startup errors
+        # cannot cause unbounded replacement jobs.
+        record_failure(root,token,'cpu-startup',exc)
+        raise
     atomic(rr/'state/job_resources'/(jid+'.json'),dict(job=jid,at=now(),
         max_aggregate_rss_bytes=0,current_aggregate_rss_bytes=0,elapsed_seconds=0,
         cpu_seconds=0,allocated_cpu=4,allocated_memory_gib=16,children=[],resource_error=False))
@@ -177,6 +209,9 @@ def gpu(root):
 def pilot_gate(root,state):
     if state.get('pilot_passed'):return True
     tokens=state.get('pilot_tokens',[])
+    if any(state['regions'].get(t,{}).get('status')=='BLOCKED' for t in tokens):
+        raise ValueError('Initial two-region qualification is blocked; repair that region before expansion')
+    if len(tokens)>2:raise ValueError('Qualification cohort must contain exactly two regions')
     if len(tokens)!=2:return False
     report={}
     for token in tokens:
@@ -189,8 +224,13 @@ def pilot_gate(root,state):
             return False
         resources=[read(p) for p in (rr/'state/job_resources').glob('*.json')]
         if not resources:return False
-        if any(r.get('resource_error') or r.get('max_aggregate_rss_bytes',0)>12*GIB for r in resources):
+        if any(r.get('max_aggregate_rss_bytes',0)>12*GIB for r in resources):
             raise ValueError('Two-lane resource qualification failed')
+        # A recovered I/O failure is retained in audit history; it must not
+        # permanently poison a subsequently verified qualification cohort.
+        healthy=[r for r in resources if not r.get('resource_error') and
+                 r.get('max_aggregate_rss_bytes',0)>0]
+        if not healthy:return False
         report[token]=dict(verified_chunks=len(complete),parity_dates=planned,
                            peak_job_bytes=max(r['max_aggregate_rss_bytes'] for r in resources))
     atomic(Path(root)/'reports/scaleout_gate.json',dict(passed=True,at=now(),regions=report,
@@ -300,12 +340,23 @@ def control(root,once=False):
                             continue
                         else:continue
                     blocked=[t for t in s['tasks'].values() if 'blocked' in (t['input_status'],t['prediction_status'])]
+                    if any(j['kind']=='gpu' for j in current) and any(
+                            t['prediction_status']=='blocked' for t in blocked):
+                        # The GPU wrapper annotates the frozen worker's error
+                        # with classification/counters before its job exits.
+                        continue
                     permanent=[t for t in blocked if not t.get('transient') or t.get('attempts',0)>=3]
                     if permanent:
                         with state_edit(root) as d:d['regions'][token].update(status='BLOCKED',error=permanent[0].get('error'))
                         (rr/'state/STOP').touch();continue
                     if blocked:continue
                     own=[j for j in current if j['token']==token]
+                    # Pending workers have never opened inputs. Do not wait for
+                    # empty jobs to obtain resources after the work is done.
+                    if s['phase']!='BUILD' or all(
+                            t['input_status']=='ready' and not t.get('lease')
+                            for t in (s['tasks'][k] for k in s['waves'][s['active_wave']]['keys'])):
+                        retire_pending_producers(root,token,own)
                     if s['phase']=='COMPLETE' and not own:
                         with state_edit(root) as d:
                             d['regions'][token].update(status='COMPLETE',final=s['final'],completed_at=now())
@@ -333,9 +384,15 @@ def control(root,once=False):
                         if kind=='cleanup' and time.time()<s.get('cleanup_not_before_epoch',math.inf):continue
                         if not own:submit(root,kind,token,lane)
                 state=read(root/'state/campaign.json')
-                if not state.get('pilot_passed') and pilot_gate(root,state):
-                    with state_edit(root) as d:d.update(pilot_passed=True,lane_limit=10,phase='RUNNING',expanded_at=now())
-                    state=read(root/'state/campaign.json')
+                if not state.get('pilot_passed'):
+                    try:qualified=pilot_gate(root,state)
+                    except ValueError as exc:
+                        with state_edit(root) as d:d.update(phase='PILOT_BLOCKED',pilot_error=str(exc))
+                        atomic(root/'reports/scaleout_gate.json',dict(passed=False,at=now(),error=str(exc)))
+                        report_status(root,jobs(root));return
+                    if qualified:
+                        with state_edit(root) as d:d.update(pilot_passed=True,lane_limit=10,phase='RUNNING',expanded_at=now())
+                        state=read(root/'state/campaign.json')
                 # Release a blocked lane only after all its tasks actually stop.
                 for lane,token in enumerate(state['lanes']):
                     if token and state['regions'][token]['status']=='BLOCKED' and not any(j['token']==token for j in jobs(root)):

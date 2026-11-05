@@ -28,6 +28,9 @@ class Queue:
     def __init__(self, c):
         self.path = Path(c['root']) / 'state/queue.json'
 
+    def snapshot(self):
+        return ops.read(self.path)
+
     @contextlib.contextmanager
     def edit(self):
         state = ops.read(self.path)
@@ -177,6 +180,85 @@ class ControllerTests(unittest.TestCase):
                    'T000002': {'status': 'READY', 'selected_days': 20},
                    'T000004': {'status': 'ACTIVE', 'selected_days': 100}}
         self.assertEqual(ops.ready_order(regions), ['T000002', 'T000003', 'T000001'])
+
+    def registered_job(self, job_id, token=None, kind='cpu', state='PENDING', name=None):
+        token = token or self.token
+        name = name or ops.PREFIX + kind
+        record = dict(job=job_id, name=name, kind=kind, token=token, lane=0,
+                      args=['sbatch', '--chdir=' + str(self.root), str(self.root / 'code/run.sh')],
+                      release_sha256=ops.sha(self.root / 'code/release.json'))
+        ops.atomic(self.root / 'state/submissions' / (job_id + '.json'), record)
+        return dict(id=job_id, name=name, kind=kind, token=token, lane=0, state=state)
+
+    def test_retire_pending_producers_is_region_owned_state_guarded_and_audited(self):
+        current = [self.registered_job('101'), self.registered_job('102', state='RUNNING'),
+                   self.registered_job('103', token='T000178'), self.registered_job('104', kind='verify'),
+                   self.registered_job('105', name='wisp2c-cpu')]
+        with patch.object(ctl.subprocess, 'run', return_value=types.SimpleNamespace(stdout='')) as run:
+            retired = ctl.retire_pending_producers(self.root, self.token, current)
+        self.assertEqual(retired, ['101'])
+        run.assert_called_once()
+        args = run.call_args.args[0]
+        self.assertEqual(args[0], 'scancel')
+        self.assertIn('--state=PENDING', args)
+        self.assertIn('101', args)
+        self.assertTrue(all(job not in args for job in ['102', '103', '104', '105']))
+        records = list((self.root / 'reports/job_retirements').glob('*.json'))
+        self.assertTrue(records)
+        self.assertIn('101', ''.join(p.read_text() for p in records))
+
+    def test_retirement_rejects_mismatched_registry_before_cancelling(self):
+        current = [self.registered_job('101')]
+        path = self.root / 'state/submissions/101.json'
+        wrong = ops.read(path)
+        wrong['token'] = 'T000178'
+        ops.atomic(path, wrong)
+        with patch.object(ctl.subprocess, 'run') as run, self.assertRaises(ValueError):
+            ctl.retire_pending_producers(self.root, self.token, current)
+        run.assert_not_called()
+
+    def test_failed_initial_pilot_stops_gate_without_growing_cohort(self):
+        state = dict(pilot_passed=False, pilot_tokens=[self.token, 'T000178'],
+                     regions={self.token: {'status': 'BLOCKED', 'error': 'invalid input'},
+                              'T000178': {'status': 'ACTIVE'}, 'T000179': {'status': 'READY'}})
+        with self.assertRaises(ValueError):
+            ctl.pilot_gate(self.root, state)
+        self.assertEqual(state['pilot_tokens'], [self.token, 'T000178'])
+
+    def test_control_stops_pilot_blocked_instead_of_admitting_third_region(self):
+        state = dict(scan_complete=True, phase='PILOT', pilot_passed=False,
+                     pilot_tokens=[self.token, 'T000178'], lanes=[None] * 10, lane_limit=2,
+                     regions={self.token: {'status': 'BLOCKED', 'error': 'invalid input'},
+                              'T000178': {'status': 'READY', 'selected_days': 100},
+                              'T000179': {'status': 'READY', 'selected_days': 200}})
+        ops.atomic(self.root / 'state/campaign.json', state)
+        prepare = Mock()
+        with patch.object(ctl, 'jobs', return_value=[]), \
+                patch.object(ctl, 'submit') as submit, patch.object(ctl, 'report_status'), \
+                patch.dict(sys.modules, enroll=types.SimpleNamespace(prepare_scratch=prepare)):
+            ctl.control(self.root, once=True)
+        result = ops.read(self.root / 'state/campaign.json')
+        self.assertEqual(result['phase'], 'PILOT_BLOCKED')
+        self.assertEqual(result['pilot_tokens'], [self.token, 'T000178'])
+        self.assertEqual(result['regions']['T000179']['status'], 'READY')
+        prepare.assert_not_called()
+        submit.assert_not_called()
+
+    def test_cpu_startup_failure_records_bounded_stage_evidence_before_fork(self):
+        self.state('BUILD')
+        backend = types.SimpleNamespace(qualify=Mock(side_effect=OSError(errno.EIO, 'source unavailable')))
+        with patch.object(ctl, 'activate', return_value=(self.c, self.ad)), \
+                patch.dict(sys.modules, {'wisp_stream': types.SimpleNamespace(backend=backend),
+                                         'wisp_stream.backend': backend}), \
+                patch.object(ctl.subprocess, 'Popen') as popen:
+            for attempt in (1, 2, 3):
+                with self.assertRaises(OSError):
+                    ctl.cpu_parent(self.root, self.token)
+                report = ops.read(self.rr / 'reports/stage_error.json')
+                self.assertEqual(report['kind'], 'cpu-startup')
+                self.assertEqual(report['attempts'], attempt)
+                self.assertTrue(report['transient'])
+            popen.assert_not_called()
 
 
 if __name__ == '__main__':

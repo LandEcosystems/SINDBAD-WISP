@@ -7,6 +7,7 @@ batch implementation and output writer remain the audited implementations.
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import os
 from pathlib import Path
@@ -34,6 +35,9 @@ now = rt.now
 BUDGET_BYTES = 256 * 2**30
 MAX_WAVE_BYTES = 240 * 2**30
 FIXED_CACHE_BYTES = 8 * 2**30
+MAX_FAILURE_ATTEMPTS = 3
+TRANSIENT_ERRNOS = {errno.EIO, errno.ENXIO, errno.ESTALE, errno.ETIMEDOUT,
+                    errno.ECONNRESET, errno.ENETUNREACH}
 _CAMPAIGN = None
 _ORIGINAL_QUEUE = rt.Queue
 _ORIGINAL_VERIFY = rt._original_verify
@@ -322,8 +326,122 @@ def cpu_one(c):
     return rt.cpu_one(c)
 
 
+def _stage_attempts(task, stage):
+    attempts = int(task.get('failure_attempts_by_stage', {}).get(stage, 0))
+    legacy = int(task.get('attempts', 0)) if task.get('failed_stage', stage) == stage else 0
+    return max(attempts, legacy)
+
+
 def recover(c, active_ids):
-    return rt.recover(c, active_ids)
+    """Bound scheduler-owner failures as well as ordinary transient failures.
+
+    A complete, validated GPU receipt is restored without consuming a retry.
+    Otherwise a scheduler-confirmed dead owner consumes one failed attempt of
+    its stage. The third failure is terminal; ordinary day checkpoints release
+    their leases explicitly and do not count as failures.
+    """
+    queue = Queue(c)
+    snapshot = queue.snapshot()
+    active_ids = {str(item) for item in active_ids}
+    missing = {str(task['job']) for task in snapshot['tasks'].values()
+               if task.get('lease') and task.get('job') and str(task['job']) not in active_ids}
+    terminal = {}
+    if missing:
+        result = rt.subprocess.run(
+            ['sacct', '-X', '-n', '-P', '-j', ','.join(sorted(missing)), '-o', 'JobIDRaw,State'],
+            text=True, capture_output=True, check=True, timeout=30)
+        for row in result.stdout.splitlines():
+            fields = row.split('|')
+            if len(fields) > 1 and fields[1].split() and fields[1].split()[0] in rt.TERMINAL_STATES:
+                terminal[fields[0]] = fields[1]
+    for key, task in snapshot['tasks'].items():
+        expired = bool(task.get('lease') and str(task.get('job')) in terminal)
+        stage = task.get('stage') or task.get('failed_stage', 'cpu')
+        if stage not in {'cpu', 'gpu'}:
+            raise ValueError('Unknown task recovery stage: ' + key)
+        retry = (task.get('transient') and _stage_attempts(task, stage) < MAX_FAILURE_ATTEMPTS
+                 and time.time() >= task.get('retry_after', 0)
+                 and 'blocked' in (task.get('input_status'), task.get('prediction_status')))
+        if not (expired or retry):
+            continue
+        try:
+            with locked(Path(c['root']) / 'locks/tasks' / (key + '.lock'), False):
+                receipt_path = Path(c['root']) / 'manifests/tasks' / key / 'output.json'
+                restored = None
+                if stage == 'gpu' and receipt_path.exists():
+                    from products import validate_chunk
+                    receipt = read_json(receipt_path)
+                    try:
+                        validate_chunk(c, key, receipt, task)
+                        restored = receipt
+                    except (ValueError, FileNotFoundError, KeyError):
+                        # A partial/corrupt file remains incomplete; never infer
+                        # success solely from an output filename or receipt.
+                        restored = None
+                with queue.edit() as state:
+                    current = state['tasks'][key]
+                    if current != task:
+                        continue
+                    field = 'input_status' if stage == 'cpu' else 'prediction_status'
+                    if restored:
+                        current[field] = 'done'
+                        current['output_sha256'] = restored['sha256']
+                        current['restored_from_verified_output_at'] = now()
+                    else:
+                        attempts = _stage_attempts(task, stage)
+                        if expired:
+                            attempts += 1
+                            failures = dict(current.get('failure_attempts_by_stage', {}))
+                            failures[stage] = attempts
+                            deaths = dict(current.get('owner_failure_attempts_by_stage', {}))
+                            deaths[stage] = deaths.get(stage, 0) + 1
+                            current.update(attempts=attempts, failure_attempts_by_stage=failures,
+                                           owner_failure_attempts_by_stage=deaths, failed_stage=stage,
+                                           last_scheduler_failure=terminal[str(task['job'])],
+                                           error='Task owner ended in scheduler state ' + terminal[str(task['job'])])
+                        current[field] = 'blocked' if attempts >= MAX_FAILURE_ATTEMPTS else 'queued'
+                        if attempts >= MAX_FAILURE_ATTEMPTS:
+                            current['retry_limit_reached'] = True
+                    current.update(job=None, pid=None, host=None, lease=None, stage=None,
+                                   transient=False, recovered_at=now())
+                    current['status'] = rt.compatible_status(current)
+                    rt._claims.pop((str(queue.root), key), None)
+        except BlockingIOError:
+            # A live reader/writer still owns the file; scheduler evidence alone
+            # never authorizes concurrent repair.
+            continue
+
+
+def record_gpu_failure(c, exc, before):
+    """Add bounded, typed failure metadata omitted by the frozen GPU worker."""
+    queue = Queue(c)
+    wave_keys = set(current_wave(before)['keys'])
+    transient = isinstance(exc, OSError) and exc.errno in TRANSIENT_ERRNOS
+    affected = []
+    with queue.edit() as state:
+        for key in wave_keys:
+            previous = before['tasks'][key]
+            task = state['tasks'][key]
+            if (task.get('prediction_status') != 'blocked' or task.get('failed_stage') != 'gpu'
+                    or task.get('lease') or task.get('error') != str(exc)):
+                continue
+            if (previous.get('prediction_status') == 'blocked'
+                    and previous.get('updated') == task.get('updated')):
+                continue
+            attempts = _stage_attempts(previous, 'gpu') + 1
+            failures = dict(task.get('failure_attempts_by_stage', {}))
+            failures['gpu'] = attempts
+            task.update(attempts=attempts, failure_attempts_by_stage=failures,
+                        transient=transient and attempts < MAX_FAILURE_ATTEMPTS,
+                        retry_after=time.time() + 120, failure_class=type(exc).__name__,
+                        failure_errno=getattr(exc, 'errno', None), updated=now())
+            if attempts >= MAX_FAILURE_ATTEMPTS:
+                task['retry_limit_reached'] = True
+            affected.append(key)
+    atomic_json(Path(c['root']) / 'reports/errors' / ('gpu_classification_' + str(time.time_ns()) + '.json'),
+                {'at': now(), 'keys': sorted(affected), 'error': str(exc), 'transient': transient,
+                 'exception_class': type(exc).__name__, 'errno': getattr(exc, 'errno', None)})
+    return affected
 
 
 def verify_wave(c):
@@ -454,6 +572,9 @@ def gpu(c, model=None):
         p.gpu_worker(c)
     except WaveFinished:
         pass
+    except Exception as exc:
+        record_gpu_failure(c, exc, state)
+        raise
     finally:
         p.BatchedEOS = original
     return model
