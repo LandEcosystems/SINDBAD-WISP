@@ -1,0 +1,21 @@
+Subject: SINDBAD–WISP update: 293 regions analysed and three provisional findings
+
+Hi Nuno, hi Sujan,
+
+I have analysed a snapshot of 293 regions from WISP_V1_202610, comparing No_Fire and VIIRS_Fire. Of these, 247 pass the primary physical QA gate; the remaining 46 are flagged and kept separate from the main analysis. The attached three figures show selected cases from the QA-passed subset.
+
+1. Productivity alone can miss a carbon-stock response (Sétif, Algeria).
+The VIIRS-fire simulation has only 0.99% lower mean annual GPP over 2015–2023, but 13.4% less vegetation carbon at the end of 2023. This suggests that biomass stocks may provide a stronger disturbance constraint than GPP alone. The next question is which pools and allocation/turnover processes explain the difference; this is not yet evidence of a particular recovery mechanism.
+
+2. Direct combustion changes the annual sink/source diagnosis (near Vila Real, Portugal).
+In 2016, VIIRS-fire NEE is −25.3 g C m⁻² yr⁻¹, implying net uptake if considered alone. Adding 33.4 g C m⁻² yr⁻¹ of direct fire carbon gives +8.2 g C m⁻² yr⁻¹: a net source in this modelled case. I independently recomputed these totals from the original daily outputs. This is particularly relevant to T9.2: NEE and direct combustion need to be reported separately and combined consistently.
+
+3. A joint carbon–water mismatch deserves priority diagnosis (two Nile Delta regions).
+Both scenarios produce much lower GPP and ET than both MODIS and FLUXCOM-X on matched reference cells and years. The discrepancy persists without fire, so we should first examine water supply, land-cover/support and parameterization rather than attribute it to fire. The references differ substantially in magnitude, but agree on the direction of this discrepancy.
+
+These are exploratory model results, not observed fire-emission estimates or Mediterranean-wide conclusions. The current forcing uses the VIIRS-based fire proxy; genuine WISP predictions are not included in this comparison.
+
+Do these three directions look useful for the next stage: stock-versus-flux constraints, complete fire carbon accounting, and targeted diagnosis of joint GPP/ET biases?
+
+Best,
+Yuchen
