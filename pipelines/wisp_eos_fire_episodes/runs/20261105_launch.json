@@ -1,0 +1,70 @@
+{
+  "automatic_stages": [
+    "pilot gate",
+    "bounded CPU expansion",
+    "390-day input verification",
+    "shared A100 batch8",
+    "sparse NetCDF verification",
+    "600-second retention and isolated input cleanup",
+    "full-decade reference comparison"
+  ],
+  "branch": "codex/wisp-fire-episodes-20261105",
+  "code_commit": "0495e55",
+  "cpu_limit_including_control": 32,
+  "deployed_unit_tests": {
+    "failed": 0,
+    "log": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/wisp_eos_fire_episodes_v1/reports/unit_tests_20261105.log",
+    "passed": 55
+  },
+  "event_controller_job": "8086280",
+  "gpu_limit_shared_with_full_decades": 1,
+  "handover": {
+    "at": "2026-11-05T10:47:47.988729+00:00",
+    "deferred_cubes": 14,
+    "lanes": {
+      "a": {
+        "active_cube": "T000830",
+        "retained_leases": 35,
+        "task_payload_unchanged": true,
+        "workers_cancelled": false
+      },
+      "b": {
+        "active_cube": "T000001",
+        "retained_leases": 48,
+        "task_payload_unchanged": true,
+        "workers_cancelled": false
+      }
+    },
+    "original_campaign_complete": false,
+    "passed": true
+  },
+  "legacy_continuation_jobs": {
+    "a": "8086278",
+    "b": "8086279"
+  },
+  "pilot_cpu_jobs": [
+    "8086321",
+    "8086322"
+  ],
+  "producer_processes_per_job": 2,
+  "production_cpu_jobs_max": 30,
+  "recorded_utc": "2026-11-05T10:51:31.506196+00:00",
+  "region_counts": {
+    "T000001": {
+      "chunks": 24,
+      "days": 132,
+      "episodes": 12
+    },
+    "T000830": {
+      "chunks": 44,
+      "days": 258,
+      "episodes": 21
+    }
+  },
+  "remaining_full_decade_cubes_deferred": 14,
+  "run_root": "/Net/Groups/BGI/work_1/yuchen/SINDBAD_WISP_longcube/Batch1_400_cube/wisp_eos_fire_episodes_v1",
+  "scientific_scope": "Retrospective observation-conditioned fire episodes; not annual forecast validation.",
+  "scratch_budget_gib": 128,
+  "selection_sha256": "858c6b20cc49a28eff6aff754a084d9f1f605411015d19fd08c7b2e476064701",
+  "status_at_launch": "Two pilot CPU jobs RUNNING with four independently leased chunks; numerical backend qualification passed. Real-input parity gate, GPU prediction and final products still pending."
+}
