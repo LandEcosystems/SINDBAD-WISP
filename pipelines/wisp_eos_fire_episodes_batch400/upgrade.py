@@ -80,6 +80,14 @@ def _source_files(source):
     return {p.name: sha(p) for p in source.iterdir() if p.is_file() and p.suffix in {".py", ".md"}}
 
 
+def _sync_dir(path):
+    descriptor = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def _verify_region(root, rr, identity, allowed_release_hashes):
     if identity.get("campaign_release_sha256") not in allowed_release_hashes:
         raise ValueError("Region is bound to a different campaign release: " + rr.name)
@@ -110,6 +118,9 @@ def _prepare(source, root, commit):
     old = verify_release(root)
     old_sha = sha(root / "code/release.json")
     old_code = root / "code"
+    source_hashes = _source_files(source)
+    if not source_hashes:
+        raise ValueError("New operational checkout has no Python or Markdown files")
     pilot_source = source.parent / "wisp_eos_fire_episodes"
     if _source_files(pilot_source) != _source_files(old_code / "wisp_eos_fire_episodes"):
         raise ValueError("Frozen pilot dependency differs; operational upgrade cannot replace it")
@@ -130,8 +141,10 @@ def _prepare(source, root, commit):
     shutil.copytree(old_code, staged)
     shutil.rmtree(staged / "batch400")
     (staged / "batch400").mkdir()
-    for name in _source_files(source):
+    for name in source_hashes:
         shutil.copy2(source / name, staged / "batch400" / name)
+    if _source_files(staged / "batch400") != source_hashes or _source_files(source) != source_hashes:
+        raise ValueError("Operational checkout changed while staging the immutable release")
     # Preserve the launcher and pilot byte-for-byte. Drop incidental interpreter caches.
     for directory in list(staged.rglob("__pycache__")):
         shutil.rmtree(directory)
@@ -148,7 +161,7 @@ def _prepare(source, root, commit):
     _code_check(staged, new)
     preserved = _preserved_hashes(root)
     journal = dict(schema=1, phase="PREPARED", started=now(), root=str(root), archive=str(archive),
-                   source=str(source), source_hashes=_source_files(source),
+                   source=str(source), source_hashes=source_hashes,
                    old_commit=old["git_commit"], new_commit=commit,
                    old_release_sha256=old_sha, new_release_sha256=sha(staged / "release.json"),
                    preserved_hashes=preserved,
@@ -171,6 +184,8 @@ def _finish(root, journal, rows_provider):
             if old_copy.exists():
                 raise ValueError("Both old live and archived code exist; refuse ambiguous state")
             os.replace(live, old_copy)
+            _sync_dir(root)
+            _sync_dir(archive)
         elif live_sha != journal["new_release_sha256"]:
             raise ValueError("Live code is neither the old nor the staged release")
     if not old_copy.exists() or sha(old_copy / "release.json") != journal["old_release_sha256"]:
@@ -181,6 +196,8 @@ def _finish(root, journal, rows_provider):
             raise ValueError("Staged release changed before directory swap")
         _code_check(staged, read(staged / "release.json"))
         os.replace(staged, live)
+        _sync_dir(root)
+        _sync_dir(archive)
     _code_check(live, read(live / "release.json"))
     for token in journal["identity_tokens"]:
         rr = root / "regions" / token
