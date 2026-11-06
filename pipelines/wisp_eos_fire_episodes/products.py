@@ -411,7 +411,10 @@ def _stream_merge(c, region, receipts, temporary, dates, episode_ids, episodes, 
 
 
 def date_selection_description(c):
-    rules = _read(Path(c['root']) / 'manifests/selection.json')['rules']
+    rules = _read(Path(c['root']) / 'manifests/selection.json').get('rules')
+    if rules is None:
+        # Older sparse-product manifests specify dates without an expansion rule.
+        return 'Explicit dates in the frozen selection manifest; expansion unspecified'
     before = rules['margin_days']
     after = rules.get('margin_after_days', before)
     return ('Union of observed central-96x96 VIIRS fire dates: '

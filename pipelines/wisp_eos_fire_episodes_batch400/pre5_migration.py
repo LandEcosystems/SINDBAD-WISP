@@ -333,7 +333,18 @@ def finish(root):
         input_days_linked=sum(r['input_days_linked'] for r in reports),
         new_boundary_days_to_validate=sum(r['new_boundary_days_to_validate'] for r in reports))
     atomic(root/'reports/pre5_migration_complete.json',result)
-    with state_edit(root) as s:s.update(phase='RUNNING',scan_complete=True)
+    # Resume occupied lanes before admitting fresh regions: imported cache must
+    # not sit idle while ten additional regions allocate another cache budget.
+    from enroll import prepare_scratch
+    oldroot=Path(read(root/'config/campaign.json')['migration_source'])
+    lanes=[None]*10
+    for lane,token in enumerate(read(oldroot/'state/campaign.json')['lanes']):
+        if token and s['regions'][token]['status']=='READY':
+            prepare_scratch(root,token);lanes[lane]=token
+    with state_edit(root) as s:
+        s.update(phase='RUNNING',scan_complete=True,lanes=lanes)
+        for lane,token in enumerate(lanes):
+            if token:s['regions'][token].update(status='ACTIVE',lane=lane,admitted_at=now(),resumed_parent_lane=True)
     print(json.dumps(result),flush=True)
 
 if __name__=='__main__':
