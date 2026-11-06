@@ -66,10 +66,12 @@ def daily_range(start, end):
     return [start + timedelta(days=i) for i in range((end - start).days + 1)]
 
 
-def select_dates(fire_dates, start=START, end=END, margin_days=5):
+def select_dates(fire_dates, start=START, end=END, margin_days=5, margin_after_days=None):
     """Expand each observed fire date once, then union and clip inclusively."""
     start, end = as_date(start), as_date(end)
-    if end < start or not isinstance(margin_days, int) or margin_days < 0:
+    after = margin_days if margin_after_days is None else margin_after_days
+    if (end < start or not isinstance(margin_days, int) or margin_days < 0
+            or not isinstance(after, int) or after < 0):
         raise ValueError("Invalid date window or margin")
     fires = [as_date(d) for d in fire_dates]
     if len(fires) != len(set(fires)):
@@ -79,7 +81,7 @@ def select_dates(fire_dates, start=START, end=END, margin_days=5):
     selected = set()
     for day in fires:
         selected.update(daily_range(max(start, day - timedelta(days=margin_days)),
-                                    min(end, day + timedelta(days=margin_days))))
+                                    min(end, day + timedelta(days=after))))
     return sorted(selected)
 
 
@@ -116,9 +118,10 @@ def balanced_chunks(days, maximum=7):
 
 
 def build_region_selection(token, cube_record, fire_dates, *, start=START, end=END,
-                           margin_days=5, max_chunk_days=7, audit=None):
+                           margin_days=5, max_chunk_days=7, audit=None,
+                           margin_after_days=None, partition_parent_margin_days=None):
     fires = sorted(as_date(d) for d in fire_dates)
-    selected = select_dates(fires, start, end, margin_days)
+    selected = select_dates(fires, start, end, margin_days, margin_after_days)
     episodes, blocks = [], []
     for index, days in enumerate(merge_dates(selected), 1):
         episode_id = f"{token}_E{index:03d}"
@@ -129,6 +132,21 @@ def build_region_selection(token, cube_record, fire_dates, *, start=START, end=E
         for chunk in balanced_chunks(days, max_chunk_days):
             blocks.append({"block_id": f"B{len(blocks) + 1:03d}", "episode_id": episode_id,
                            "episode_index": index, "dates": [timestamp(d) for d in chunk]})
+    if partition_parent_margin_days is not None:
+        # Retain prior chunk boundaries when shrinking a running experiment.
+        # This affects I/O grouping only, never the selected scientific dates.
+        parent = build_region_selection(token, cube_record, fires, start=start, end=end,
+            margin_days=partition_parent_margin_days, max_chunk_days=max_chunk_days, audit=audit)
+        wanted = {timestamp(d) for d in selected}
+        if not wanted.issubset(parent['selected_dates']):
+            raise ValueError('Migration selection must be a subset of its parent')
+        day_episode = {d: e for e in episodes for d in e['dates']}
+        blocks = []
+        for old in parent['blocks']:
+            for days in merge_dates([d for d in old['dates'] if d in wanted]):
+                e = day_episode[timestamp(days[0])]
+                blocks.append(dict(block_id=f'B{len(blocks)+1:03d}', episode_id=e['episode_id'],
+                    episode_index=e['episode_index'], dates=[timestamp(d) for d in days]))
     summary = {"fire_days": len(fires), "selected_days": len(selected),
                "episodes": len(episodes), "tasks": len(blocks)}
     return {"token": token, "region_id": cube_record["region_id"],
@@ -138,7 +156,8 @@ def build_region_selection(token, cube_record, fire_dates, *, start=START, end=E
             "episodes": episodes, "blocks": blocks, "summary": summary}
 
 
-def make_manifest(regions, *, start=START, end=END, margin_days=5, max_chunk_days=7):
+def make_manifest(regions, *, start=START, end=END, margin_days=5, max_chunk_days=7,
+                  margin_after_days=None, partition_parent_margin_days=None):
     """Build immutable selection and task identities without run timestamps."""
     by_token = {r["token"]: copy.deepcopy(r) for r in regions}
     if len(by_token) != len(regions):
@@ -153,6 +172,12 @@ def make_manifest(regions, *, start=START, end=END, margin_days=5, max_chunk_day
              "missing_fire_policy": "reject unknown or nonbinary centre pixel; never coerce to zero",
              "input_window_hours": [-96, 24], "future_labels_used_as_model_input": False,
              "experiment_interpretation": "retrospective observation-conditioned event experiment"}
+    if margin_after_days is not None:
+        rules['margin_after_days'] = margin_after_days
+        rules['margin_rule'] = 'union [fire day - margin_days, fire day + margin_after_days], inclusive, clipped to period'
+    if partition_parent_margin_days is not None:
+        rules['partition_parent_margin_days'] = partition_parent_margin_days
+        rules['chunk_rule'] = 'intersect deterministic parent symmetric chunks with selected dates; split gaps'
     identity = {"schema": "wisp_fire_episodes_selection_v1", "rules": rules,
                 "regions": by_token}
     selection_sha = digest(identity)
@@ -180,7 +205,9 @@ def validate_manifest(manifest):
     for token, region in manifest["regions"].items():
         expected = build_region_selection(token, region["cube_record"], region["fire_dates"],
             start=rules["start"], end=rules["end_inclusive"], margin_days=rules["margin_days"],
-            max_chunk_days=rules["max_chunk_days"], audit=region["source_audit"])
+            max_chunk_days=rules["max_chunk_days"], audit=region["source_audit"],
+            margin_after_days=rules.get('margin_after_days'),
+            partition_parent_margin_days=rules.get('partition_parent_margin_days'))
         if expected != region:
             raise ValueError("Region dates or episodes differ from selection rule: " + token)
         for block in region["blocks"]:

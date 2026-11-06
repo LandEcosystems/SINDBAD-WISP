@@ -8,7 +8,7 @@ import sys
 from common import (BASE, LEGACY, PILOT, PYTHON, DEFAULT_ROOT, DEFAULT_SCRATCH,
                     atomic, read, sha, now, GIB, verify_release)
 
-def stage(source, root, scratch, commit):
+def stage(source, root, scratch, commit, migration_source=None):
     source, root, scratch = map(Path, (source, root, scratch))
     if (root/'code/release.json').exists():
         verify_release(root)
@@ -45,6 +45,9 @@ def stage(source, root, scratch, commit):
         max_wave_days=1000,cache_reserve_bytes=8*GIB,global_gpu_jobs=1,batch_size=8,
         cleanup_delay_seconds=600,gpu_idle_seconds=300,scan_refresh_seconds=300,
         legacy_root=str(LEGACY),pilot_root=str(PILOT),existing_model_inference_only=True)
+    if migration_source is not None:
+        config.update(migration_source=str(Path(migration_source).resolve()),
+                      margin_before_days=5, margin_after_days=0)
     atomic(root/'config/campaign.json',config)
     source_index=Path(read(PILOT/'config/deployment.json')['scratch'])/'cache/fire_index'
     hashes={}
@@ -77,5 +80,5 @@ def stage(source, root, scratch, commit):
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--source',type=Path,default=Path(__file__).resolve().parent)
     p.add_argument('--root',type=Path,default=DEFAULT_ROOT);p.add_argument('--scratch',type=Path,default=DEFAULT_SCRATCH)
-    p.add_argument('--commit',required=True);a=p.parse_args()
-    stage(a.source,a.root,a.scratch,a.commit)
+    p.add_argument('--commit',required=True);p.add_argument('--migration-source',type=Path);a=p.parse_args()
+    stage(a.source,a.root,a.scratch,a.commit,a.migration_source)

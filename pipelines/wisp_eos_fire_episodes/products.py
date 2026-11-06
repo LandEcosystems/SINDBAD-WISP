@@ -366,7 +366,7 @@ def _stream_merge(c, region, receipts, temporary, dates, episode_ids, episodes, 
                     out.setncatts({'chunk_receipts_sha256': _digest(receipts),
                         'selection_contract_sha256': selection_sha,
                         'hardware': ','.join(sorted({r['hardware'] for r in receipts})),
-                        'date_selection': 'Union of observed central-96x96 VIIRS fire dates plus/minus five calendar days',
+                        'date_selection': date_selection_description(c),
                         'experiment': 'Retrospective observation-conditioned fire-episode hindcast; not a full-year forecast evaluation',
                         'unselected_dates': 'Absent; never interpreted as predicted zero fire',
                         'episode_catalog_json': json.dumps(episodes, sort_keys=True)})
@@ -408,6 +408,14 @@ def _stream_merge(c, region, receipts, temporary, dates, episode_ids, episodes, 
                 pos += len(src.dimensions['time'])
     with Path(temporary).open('rb') as f:
         os.fsync(f.fileno())
+
+
+def date_selection_description(c):
+    rules = _read(Path(c['root']) / 'manifests/selection.json')['rules']
+    before = rules['margin_days']
+    after = rules.get('margin_after_days', before)
+    return ('Union of observed central-96x96 VIIRS fire dates: '
+            f'[fire day - {before} days, fire day + {after} days], inclusive; clipped to study period')
 
 
 def validate_final(c, region, tasks, selection=None):

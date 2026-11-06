@@ -186,6 +186,10 @@ def cleanup_wave(c):
                 return dict(cleaned=False, pending=True, reason='active task lock')
             plans = []
             for key in wave['keys']:
+                if queue['tasks'][key].get('pre5_reused_prediction'):
+                    from pre5_migration import verify_imported_prediction
+                    verify_imported_prediction(c, key, queue['tasks'][key])
+                    continue  # No new input tree was created for a copied prediction.
                 registration = p._registration(c, key)
                 task = queue['tasks'][key]
                 input_path = Path(c['scratch']) / 'inputs' / key

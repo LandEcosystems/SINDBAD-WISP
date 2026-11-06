@@ -136,6 +136,9 @@ def verify_execution(c):
     for field, relative in files.items():
         if identity.get(field) != file_hash(root / relative):
             raise ValueError('Frozen region identity changed: ' + relative)
+    if 'pre5_migration_sha256' in identity:
+        if file_hash(root / 'manifests/pre5_migration.json') != identity['pre5_migration_sha256']:
+            raise ValueError('Frozen date-subset migration identity changed')
     # The in-memory configuration is checked too: hashing a file alone must not
     # allow a caller to supply different operational paths after loading it.
     on_disk = read_json(root / 'config/deployment.json')
@@ -459,6 +462,12 @@ def verify_wave(c):
     reports = []
     for key in wave['keys']:
         task = state['tasks'][key]
+        if task.get('pre5_reused_prediction'):
+            from pre5_migration import verify_imported_prediction
+            verify_imported_prediction(c, key, task)
+            observed.extend(task['dates'])
+            reports.append(dict(key=key,days=len(task['dates']),reused_prediction=True))
+            continue
         if task['input_status'] != 'ready' or task.get('lease'):
             raise ValueError('Wave input is not complete and unowned: ' + key)
         with locked(root / 'locks/tasks' / (key + '.lock'), False):
@@ -492,6 +501,11 @@ def verify_wave(c):
     planned = read_json(root / 'manifests/parity_dates.json').get(root.name, [])
     checked = [read_json(path) for path in (root / 'reports/input_parity').glob('*.json')]
     for day in set(planned).intersection(observed):
+        imported_key = next(k for k in wave['keys'] if day in state['tasks'][k]['dates'])
+        if state['tasks'][imported_key].get('pre5_reused_prediction'):
+            # Existing, independently checked predictions are copied byte-for-byte.
+            # Their original input hashes and checks remain in the migration receipt.
+            continue
         if not any(r.get('passed') and r.get('date') == day and r.get('key') in wave['keys']
                    and set(r.get('checks', {})) == set(SHAPES) and all(r['checks'].values()) for r in checked):
             # A checkpoint may have committed its input immediately before the
@@ -549,7 +563,11 @@ def gpu(c, model=None):
         if not existing.get('passed') or existing['deployment'] != common.identity(c)['fingerprint']:
             raise ValueError('Numerical gate belongs to another deployment or failed')
     else:
-        candidates = [(key, day) for key in wave['keys'] for day in state['tasks'][key]['dates']]
+        candidates = [(key, day) for key in wave['keys']
+                      if state['tasks'][key]['prediction_status'] != 'done'
+                      for day in state['tasks'][key]['dates']]
+        if not candidates:
+            return model
         count = min(8, len(candidates))
         chosen = [candidates[round(i * (len(candidates) - 1) / max(1, count - 1))] for i in range(count)]
         examples = []

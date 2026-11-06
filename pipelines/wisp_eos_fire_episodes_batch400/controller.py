@@ -178,7 +178,9 @@ def ready_gpu_regions(root):
         if not token:continue
         p=Path(root)/'regions'/token/'state/queue.json'
         s=read(p)
-        if s['phase']=='PREDICT':ready.append((s.get('inputs_verified_at',''),token))
+        if s['phase']=='PREDICT' and any(s['tasks'][k]['prediction_status']!='done'
+                for k in s['waves'][s['active_wave']]['keys']):
+            ready.append((s.get('inputs_verified_at',''),token))
     return [t for _,t in sorted(ready)]
 
 def gpu(root):
@@ -357,7 +359,7 @@ def control(root,once=False):
                     # Pending workers have never opened inputs. Do not wait for
                     # empty jobs to obtain resources after the work is done.
                     if s['phase']!='BUILD' or all(
-                            t['input_status']=='ready' and not t.get('lease')
+                            t['input_status'] in {'ready','cleaned'} and not t.get('lease')
                             for t in (s['tasks'][k] for k in s['waves'][s['active_wave']]['keys'])):
                         retire_pending_producers(root,token,own)
                     if s['phase']=='COMPLETE' and not own:
@@ -368,7 +370,7 @@ def control(root,once=False):
                     if not s['waves']:raise ValueError('Active region has no waves')
                     keys=s['waves'][s['active_wave']]['keys'];tasks=[s['tasks'][k] for k in keys]
                     if s['phase']=='BUILD':
-                        if all(t['input_status']=='ready' and not t.get('lease') for t in tasks):
+                        if all(t['input_status'] in {'ready','cleaned'} and not t.get('lease') for t in tasks):
                             with q.edit() as d:d['phase']='INPUT_VERIFY'
                         elif not own or any(j['kind']=='cpu' for j in own):
                             cap=state.get('producer_cap',30) if state.get('pilot_passed') else 2
@@ -438,7 +440,7 @@ def control(root,once=False):
                 raise RuntimeError('Controller renewal was not admitted')
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('command',choices=['submit-control','control','once','scan','cpu','cpu-one','verify','wave','cleanup','final','gpu','status'])
+    p=argparse.ArgumentParser();p.add_argument('command',choices=['submit-control','control','once','scan','cpu','cpu-one','verify','wave','cleanup','final','gpu','status','migrate-init','migrate-region','migrate-finish'])
     p.add_argument('token',nargs='?');p.add_argument('--root',type=Path,default=Path(os.environ.get('WISP_CAMPAIGN_ROOT',DEFAULT_ROOT)))
     a=p.parse_args();root=a.root;verify_release(root)
     def stop(sig,frame):
@@ -446,7 +448,13 @@ def main():
         STOP=True
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     try:
-        if a.command=='submit-control':submit(root,'control')
+        if a.command.startswith('migrate-'):
+            import pre5_migration as migration
+            migration.quiescent(read(root/'config/campaign.json')['migration_source'])
+            if a.command=='migrate-init':migration.initialize(root)
+            elif a.command=='migrate-region':migration.migrate_region(root,a.token)
+            else:migration.finish(root)
+        elif a.command=='submit-control':submit(root,'control')
         elif a.command in {'control','once'}:
             for attempt in range(3):
                 try:

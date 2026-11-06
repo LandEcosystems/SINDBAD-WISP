@@ -5,7 +5,15 @@ This pipeline extends the audited two-region event pilot to the **fixed Batch1
 NetCDFs, the existing full-decade runs, and the scientific WISP implementation
 are read-only. It does not execute SINDBAD or replace its fire forcing.
 
-## What is selected
+## Date-selection change, 6 November 2026
+
+The running campaign is being migrated to **the observed fire day and its five
+preceding calendar days**, with **zero following-day extension**. See
+[PRE5_MIGRATION.md](PRE5_MIGRATION.md) for the new release, reuse and validation.
+The original symmetric selection remains reproducible as the default of the
+legacy selector. Production selection manifests explicitly record both margins.
+
+## Original v2 selection (retained for provenance)
 
 For each accepted source cube, read `viirs_fire_binary` in the centre
 `[16:112,16:112]`. A date with any pixel equal to 1 is an observed fire day.
