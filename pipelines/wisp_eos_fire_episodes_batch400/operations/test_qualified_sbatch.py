@@ -9,7 +9,7 @@ class QualifiedHostsTests(unittest.TestCase):
         self.assertEqual(args[0], '--exclude=bad,new')
 
     def test_gpu_and_other_projects_unchanged(self):
-        for name in ['w4e-gpu', 'wisp2c-gpu', 'another-project']:
+        for name in ['w4e-gpu', 'w4e-control', 'wisp2c-gpu', 'another-project']:
             original = ['--job-name=' + name, '--gres=gpu:A100:1', 'run.sh']
             self.assertEqual(restricted_args(original, {}, []), original)
 

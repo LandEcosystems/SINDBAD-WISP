@@ -21,15 +21,20 @@ failures, before children are created or input tasks are claimed; they do not
 mean the source regions are unusable. Healthy workers' input checkpoints stay
 in place.
 
-`qualified_sbatch.py`, deployed as `operations/node_policy_v2/bin/sbatch`,
-restricts only this campaign's non-GPU submissions to hosts with recorded
+`qualified_sbatch.py`, deployed as `operations/node_policy_v3/bin/sbatch`,
+restricts this campaign's numerical CPU submissions to hosts with recorded
 successful frozen numerical probes. The policy initially contains 25 hosts;
 the current Slurm inventory is consulted at every submission so unknown hosts
-are excluded too. Existing explicit exclusions are preserved. `w4e-gpu` and
+are excluded too. Existing explicit exclusions are preserved. `w4e-gpu`, the
+lightweight `w4e-control` scheduler, and
 unrelated jobs pass through unchanged: excluding every GPU host from GPU
 inference would make the A100 request impossible. The producer's own numerical
 probe remains mandatory. Host evidence and policy belong in
-`operations/node_policy_v2/node_policy.json` in the shared run directory.
+`operations/node_policy_v3/node_policy.json` in the shared run directory.
+The controller performs scheduling and bookkeeping, not frozen numerical
+preprocessing, so it may use general nodes without waiting for a qualified
+scientific worker allocation. Its children still inherit this wrapper and the
+numerical producer/validation restrictions.
 
 `recover_startup_blocks.py` replaces the hard-coded seven-region recovery for
 this incident. First use `freeze_manifest` to pin the explicitly reviewed

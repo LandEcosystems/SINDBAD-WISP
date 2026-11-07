@@ -24,7 +24,7 @@ def job_name(args):
 
 def restricted_args(args, policy, cluster_nodes):
     name = job_name(args)
-    if not name.startswith('w4e-') or name == 'w4e-gpu':
+    if not name.startswith('w4e-') or name in {'w4e-gpu', 'w4e-control'}:
         return list(args)
     allowed = set(policy['qualified_hosts'])
     current = set(cluster_nodes)
@@ -55,7 +55,7 @@ def restricted_args(args, policy, cluster_nodes):
 def main():
     args = sys.argv[1:]
     name = job_name(args)
-    if name.startswith('w4e-') and name != 'w4e-gpu':
+    if name.startswith('w4e-') and name not in {'w4e-gpu', 'w4e-control'}:
         policy_path = Path(__file__).resolve().parent.parent / 'node_policy.json'
         policy = json.loads(policy_path.read_text())
         result = subprocess.run(['/usr/bin/sinfo', '-N', '-h', '-o', '%N'],
