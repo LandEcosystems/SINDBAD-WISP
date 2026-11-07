@@ -78,9 +78,9 @@ class ActualInputBudget:
         self.root = Path(root).resolve()
         self.scratch = Path(scratch).resolve()
         self.limit = int(limit_bytes)
-        self.scan_interval = float(scan_interval_seconds)
+        self.scan_interval = None if scan_interval_seconds is None else float(scan_interval_seconds)
         self.min_free = int(min_free_bytes)
-        if self.limit <= 0 or self.scan_interval < 0 or self.min_free < 0:
+        if self.limit <= 0 or (self.scan_interval is not None and self.scan_interval < 0) or self.min_free < 0:
             raise ValueError('Invalid actual input budget settings')
         self.path = self.root / 'state/actual_input_budget.json'
         self.lock_path = self.root / 'locks/actual_input_budget.lock'
@@ -99,6 +99,7 @@ class ActualInputBudget:
                     raise ValueError('Disk ledger belongs to another scratch/schema')
                 state['limit_bytes'] = self.limit
                 yield state
+                state['accounting_updated_at'] = time.time()
                 _atomic(self.path, state)
             finally:
                 fcntl.flock(lock, fcntl.LOCK_UN)
@@ -154,7 +155,14 @@ class ActualInputBudget:
         return stores
 
     def _refresh(self, state, force=False):
-        if not force and time.time() - state['measured_at'] < self.scan_interval:
+        # None means one initial audit followed by incremental accounting.
+        # Existing completed input bytes change only through registered writer
+        # settlement or verified physical cleanup, so periodic full-tree walks
+        # add no admission protection and can block all workers at TB scale.
+        if not force and state['measured_at'] and self.scan_interval is None:
+            return
+        if (not force and self.scan_interval is not None
+                and time.time() - state['measured_at'] < self.scan_interval):
             return
         try:
             active_baselines = {w['store']: state['stores'].get(w['store'], 0)
@@ -178,6 +186,7 @@ class ActualInputBudget:
                     limit_bytes=state['limit_bytes'],
                     headroom_bytes=max(0, state['limit_bytes'] - projected),
                     active_writers=len(state['writers']), measured_at=state['measured_at'],
+                    accounting_updated_at=state.get('accounting_updated_at'),
                     active_writer_growth_not_yet_measured=bool(state['writers']),
                     scan_error=state.get('scan_error'), pause=state.get('pause'),
                     bound_violation=state.get('bound_violation'))

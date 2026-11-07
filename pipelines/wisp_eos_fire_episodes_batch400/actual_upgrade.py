@@ -27,9 +27,10 @@ def quiescent(root):
     return held
 
 
-def upgrade(source,root,commit):
+def upgrade(source,root,commit,operation='actual5tb_cpu_gpu_20261108'):
     source,root=Path(source).resolve(),Path(root).resolve()
-    op=root/'operations/actual5tb_cpu_gpu_20261108';archive=op/'release_archive'
+    if not operation.replace('_','').isalnum():raise ValueError('Invalid operation name')
+    op=root/'operations'/operation;archive=op/'release_archive'
     with locked(root/'locks/upgrade.lock'),locked(root/'locks/controller.lock',False),locked(root/'locks/submit.lock'):
         held=quiescent(root);journal_path=op/'upgrade.json'
         if not journal_path.exists():
@@ -42,7 +43,7 @@ def upgrade(source,root,commit):
             oldsha=sha(root/'code/release.json')
             if any(i['campaign_release_sha256']!=oldsha for i in identities.values()):raise ValueError('Mixed release identities')
             newcfg=dict(cfg,input_budget_mode='actual',backlog_budget_bytes=5_000_000_000_000,
-                input_budget_scan_seconds=3600,input_write_headroom_bytes=2*GIB,
+                input_budget_scan_seconds=None,input_write_headroom_bytes=2*GIB,
                 max_lanes=len(state['regions']),max_build_regions=10,max_total_producers=210,
                 max_cpu_consumers=8,cpu_prediction_precision='float32',cpu_prediction_batch_size=1,
                 io_policy='observe',inference_backends=['cuda','cpu'],git_commit=commit)
@@ -99,4 +100,5 @@ def upgrade(source,root,commit):
 if __name__=='__main__':
     p=argparse.ArgumentParser();p.add_argument('--root',required=True,type=Path)
     p.add_argument('--source',type=Path,default=Path(__file__).resolve().parent);p.add_argument('--commit',required=True)
-    a=p.parse_args();upgrade(a.source,a.root,a.commit)
+    p.add_argument('--operation',default='actual5tb_cpu_gpu_20261108')
+    a=p.parse_args();upgrade(a.source,a.root,a.commit,a.operation)

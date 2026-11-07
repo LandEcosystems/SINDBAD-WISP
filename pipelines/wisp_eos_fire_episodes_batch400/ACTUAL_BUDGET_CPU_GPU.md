@@ -7,6 +7,21 @@ Completed compressed input, incomplete input and in-flight writes are counted;
 the admission guard retains bounded headroom for writes already in progress.
 The filesystem free-space guard remains active independently of this budget.
 
+Storage accounting is incremental after one initial inventory. Every producer
+reserves bounded growth before writing and settles its short input store's
+actual compressed bytes when it finishes or checkpoints. Verified cleanup
+subtracts bytes after physical deletion. Existing ledger records survive a
+controller restart, so restarting does not repeat the inventory. The production
+setting `input_budget_scan_seconds: null` disables periodic full-tree scans;
+an explicit full audit is reserved for a quiescent maintenance check or recovery
+investigation. This avoids holding the shared admission lock for a long scan
+when several terabytes of input have accumulated.
+
+Reports distinguish measured stored bytes, outstanding bounded writes, the
+latest accounting update and the last full audit. An active store retains its
+last measured baseline plus its remaining byte allowance until its writer
+stops. Prediction alone never releases its input-storage charge.
+
 ## Production and consumption
 
 ```text

@@ -147,6 +147,30 @@ class ActualInputBudgetTests(unittest.TestCase):
             self.budget.release('b', b)
             self.assertEqual(scan.call_count, 1)
 
+    def test_manual_audit_initializes_once_then_accounts_incrementally(self):
+        budget = db.ActualInputBudget(self.root, self.scratch, limit_bytes=100_000,
+                                     scan_interval_seconds=None)
+        with patch.object(budget, '_scan', wraps=budget._scan) as scan:
+            budget.snapshot()
+            lease = budget.acquire('a', self.path(), 60_000)
+            actual = self.write(self.path())
+            budget.release('a', lease)
+            with patch.object(db.time, 'time', return_value=10**12):
+                self.assertEqual(budget.snapshot()['actual_input_bytes'], actual)
+            shutil.rmtree(self.path())
+            self.assertEqual(budget.refresh_path(self.path())['actual_input_bytes'], 0)
+            self.assertEqual(scan.call_count, 1)
+            budget.snapshot(refresh=True)
+            self.assertEqual(scan.call_count, 2)
+
+    def test_manual_audit_reuses_existing_ledger_without_rescan(self):
+        actual = self.write(self.path())
+        self.budget.snapshot()
+        budget = db.ActualInputBudget(self.root, self.scratch, limit_bytes=100_000,
+                                     scan_interval_seconds=None)
+        with patch.object(budget, '_scan', side_effect=AssertionError('do not repeat initial audit')):
+            self.assertEqual(budget.snapshot()['actual_input_bytes'], actual)
+
     def test_filesystem_guard_independent_of_input_budget(self):
         with patch.object(db.shutil, 'disk_usage', return_value=type('Usage', (), {'free': 1})()):
             self.assertIsNone(self.budget.acquire('a', self.path(), 60_000))
