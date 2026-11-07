@@ -66,6 +66,30 @@ class ControllerTests(unittest.TestCase):
                 self.assertIsNone(ctl.submit(self.root, 'cpu', self.token, lane))
                 run.assert_not_called()
 
+    def test_global_producer_cap_is_independent_of_resident_region_count(self):
+        cfg=ops.read(self.root/'config/campaign.json')
+        cfg['max_total_producers']=210
+        ops.atomic(self.root/'config/campaign.json',cfg)
+        current=[dict(kind='cpu',lane=i%20) for i in range(210)]
+        with patch.object(ctl,'jobs',return_value=current), patch.object(ctl.subprocess,'run') as run:
+            self.assertIsNone(ctl.submit(self.root,'cpu',self.token,19))
+            run.assert_not_called()
+
+    def test_waiting_gpu_regions_do_not_block_input_admission(self):
+        tokens=['T%06d'%i for i in range(10)]
+        for token in tokens:
+            ops.atomic(self.root/'regions'/token/'state/queue.json',{'phase':'PREDICT'})
+        cfg=dict(max_build_regions=10,scratch=str(self.root),region_budget_bytes=256,
+                 backlog_min_free_bytes=1024)
+        state={'lanes':tokens+[None]*10}
+        with patch.object(ctl.shutil,'disk_usage',return_value=types.SimpleNamespace(free=2000)):
+            self.assertTrue(ctl.admit_more_inputs(self.root,state,cfg))
+        with patch.object(ctl.shutil,'disk_usage',return_value=types.SimpleNamespace(free=1000)):
+            self.assertFalse(ctl.admit_more_inputs(self.root,state,cfg))
+        for token in tokens:
+            ops.atomic(self.root/'regions'/token/'state/queue.json',{'phase':'BUILD'})
+        self.assertFalse(ctl.admit_more_inputs(self.root,state,cfg))
+
     def test_cpu_submission_does_not_request_gpu_or_big_partition(self):
         response = types.SimpleNamespace(stdout='12345\n')
         with patch.object(ctl, 'jobs', return_value=[]), \

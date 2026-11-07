@@ -7,6 +7,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import time
@@ -45,6 +46,7 @@ def submit(root,kind,token=None,lane=None,dependency=None):
         if kind!='gpu':
             if sum(j['kind']!='gpu' for j in current)>=cfg['max_cpu_jobs']:return None
             if lane is not None and sum(j['lane']==lane and j['kind']!='gpu' for j in current)>=32:return None
+            if kind=='cpu' and sum(j['kind']=='cpu' for j in current)>=cfg.get('max_total_producers',300):return None
         def launch():
             cpus,mem,wall={
                 'control':(1,'2G','24:00:00'),'scan':(4,'16G','24:00:00'),
@@ -262,6 +264,25 @@ def performance(root,tokens):
               b['median_read_seconds'] and b['median_read_seconds']>2*a['median_read_seconds'] and b['days']<a['days'])
     return dict(at=now(),previous_30min=a,last_30min=b,io_pressure=bool(pressure))
 
+def admit_more_inputs(root, state, cfg):
+    """Separate resident prediction backlog from concurrently building regions.
+
+    Waiting for a GPU retains its region cache slot, but no longer consumes
+    one of the CPU-building slots. Resident slots bound the conservative total
+    cache reservation; the filesystem guard also covers unrelated users' writes.
+    """
+    if 'max_build_regions' not in cfg:
+        return True
+    building = 0
+    for token in state['lanes']:
+        if token:
+            queue = read(Path(root)/'regions'/token/'state/queue.json')
+            building += queue['phase']=='BUILD'
+    if building >= cfg['max_build_regions']:
+        return False
+    free = shutil.disk_usage(cfg['scratch']).free
+    return free >= cfg['region_budget_bytes'] + cfg.get('backlog_min_free_bytes',0)
+
 def record_failure(root,token,kind,exc):
     import errno,traceback
     transient=isinstance(exc,OSError) and exc.errno in {
@@ -324,6 +345,15 @@ def control(root,once=False):
             if need_scan and time.time()-state.get('last_scan_epoch',0)>=300:
                 submit(root,'scan')
             if state['scan_complete']:
+                cfg=read(root/'config/campaign.json')
+                # A cleaned wave may return to BUILD while ten other regions
+                # are already building. Do not interrupt current owners; admit
+                # producer jobs for at most the configured number of regions.
+                build_tokens=[t for t in state['lanes'] if t and
+                    read(root/'regions'/t/'state/queue.json')['phase']=='BUILD']
+                working={j['token'] for j in current if j['kind']=='cpu'}
+                build_order=sorted(build_tokens,key=lambda t:(t not in working,state['lanes'].index(t)))
+                admitted_builds=set(build_order[:cfg.get('max_build_regions',len(build_order))])
                 # Advance only regions whose workers have all relinquished this lane.
                 for lane,token in enumerate(state['lanes']):
                     if not token:continue
@@ -373,6 +403,7 @@ def control(root,once=False):
                         if all(t['input_status'] in {'ready','cleaned'} and not t.get('lease') for t in tasks):
                             with q.edit() as d:d['phase']='INPUT_VERIFY'
                         elif not own or any(j['kind']=='cpu' for j in own):
+                            if token not in admitted_builds:continue
                             cap=state.get('producer_cap',30) if state.get('pilot_passed') else 2
                             workers=sorted(j['id'] for j in own if j['kind']=='cpu')
                             with q.edit() as d:
@@ -405,6 +436,7 @@ def control(root,once=False):
                 state=read(root/'state/campaign.json')
                 for lane in range(state['lane_limit']):
                     if state['lanes'][lane]:continue
+                    if not admit_more_inputs(root,state,cfg):break
                     pending=ready_order(state['regions'])
                     if not pending:break
                     token=pending[0]
@@ -420,7 +452,7 @@ def control(root,once=False):
                 if ready_gpu_regions(root):submit(root,'gpu')
                 if state.get('pilot_passed') and time.time()-last_perf>=300:
                     perf=performance(root,state['lanes']);atomic(root/'reports/io_monitor.json',perf)
-                    if perf['io_pressure']:
+                    if perf['io_pressure'] and cfg.get('io_policy','adaptive')=='adaptive':
                         with state_edit(root) as d:
                             d['producer_cap']=max(2,d.get('producer_cap',30)//2)
                             d['resource_adjustment']=perf
