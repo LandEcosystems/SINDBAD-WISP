@@ -105,6 +105,18 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(record['token'], self.token)
         self.assertEqual(record['lane'], 0)
 
+    def test_cpu_consumer_submission_and_cap(self):
+        cfg=ops.read(self.root/'config/campaign.json');cfg['max_cpu_consumers']=8
+        ops.atomic(self.root/'config/campaign.json',cfg)
+        with patch.object(ctl,'jobs',return_value=[]),patch.object(ctl.subprocess,'run',return_value=types.SimpleNamespace(stdout='12346')) as run:
+            self.assertEqual(ctl.submit(self.root,'cpu-infer'),'12346')
+            args=run.call_args.args[0]
+            self.assertIn('--cpus-per-task=8',args)
+            self.assertIn('--mem=32G',args)
+            self.assertFalse(any(x.startswith('--gres') for x in args))
+        with patch.object(ctl,'jobs',return_value=[dict(kind='cpu-infer',lane=None)]*8),patch.object(ctl.subprocess,'run') as run:
+            self.assertIsNone(ctl.submit(self.root,'cpu-infer'));run.assert_not_called()
+
     def test_gpu_waits_for_legacy_handover_and_existing_gpu(self):
         for handed_over, rows in [(False, []), (True, [dict(name='wisp1c-gpu')])]:
             with patch.object(ctl, 'jobs', return_value=[]), \

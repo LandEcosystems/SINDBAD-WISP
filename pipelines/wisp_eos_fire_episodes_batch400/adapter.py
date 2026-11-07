@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -45,6 +46,17 @@ _ORIGINAL_VERIFY = rt._original_verify
 
 class WaveFinished(BaseException):
     """Return an idle frozen GPU worker to its shared campaign dispatcher."""
+
+
+@contextlib.contextmanager
+def prediction_reader(c):
+    """Multiple CPU/GPU readers coexist; cleanup requires exclusive ownership."""
+    path=Path(c['root'])/'locks/prediction_readers.lock'
+    path.parent.mkdir(parents=True,exist_ok=True)
+    with path.open('a+') as handle:
+        fcntl.flock(handle.fileno(),fcntl.LOCK_SH)
+        try:yield
+        finally:fcntl.flock(handle.fileno(),fcntl.LOCK_UN)
 
 
 def _inside(path, parent):
@@ -197,6 +209,17 @@ def current_wave(state):
         raise ValueError('Invalid active-wave task membership')
     return wave
 
+def actual_budget(c):
+    campaign=_campaign(c)
+    path=campaign/'config/campaign.json'
+    if not path.exists():return None
+    cfg=read_json(path)
+    if cfg.get('input_budget_mode')!='actual':return None
+    from disk_budget import ActualInputBudget
+    return ActualInputBudget(campaign,cfg['scratch'],limit_bytes=cfg['backlog_budget_bytes'],
+        scan_interval_seconds=cfg.get('input_budget_scan_seconds',3600),
+        min_free_bytes=cfg.get('backlog_min_free_bytes',0))
+
 
 class Queue(_ORIGINAL_QUEUE):
     """Keep every task auditable, while admitting only the current wave."""
@@ -206,6 +229,7 @@ class Queue(_ORIGINAL_QUEUE):
             raise ValueError('Unknown queue stage')
         if rt.STOP or (self.root / 'state/STOP').exists():
             return None
+        budget=actual_budget(self.c) if stage=='cpu' else None
         with self.edit() as state:
             if state['phase'] != {'cpu': 'BUILD', 'gpu': 'PREDICT'}[stage]:
                 return None
@@ -221,7 +245,7 @@ class Queue(_ORIGINAL_QUEUE):
                 raise WaveFinished()
             reserved = sum(t.get('reserved', 0) for t in state['tasks'].values())
             fixed = state.get('quarantine_bytes', 0) + self.c['shared_cache_reserve_bytes']
-            if stage == 'cpu' and time.time() - state.get('scratch_measured_at', 0) >= 60:
+            if stage == 'cpu' and budget is None and time.time() - state.get('scratch_measured_at', 0) >= 60:
                 measured = rt.scratch_size(self.c['scratch'])
                 state.update(scratch_measured_bytes=measured, scratch_measured_at=time.time(),
                              scratch_peak_measured_bytes=max(measured, state.get('scratch_peak_measured_bytes', 0)))
@@ -232,10 +256,21 @@ class Queue(_ORIGINAL_QUEUE):
                     task.get('input_status') == 'ready' and task.get('prediction_status') == 'queued')
                 if not eligible:
                     continue
+                if stage == 'gpu':
+                    backend=os.environ.get('WISP_INFERENCE_BACKEND','cuda')
+                    if backend not in {'cpu','cuda'}:raise ValueError('Unknown inference backend')
+                    pinned=task.get('prediction_backend')
+                    # Old partial predictions were produced only by A100.
+                    if pinned is None:
+                        metadata=common.task_paths(self.c,key)[1]
+                        if ((metadata/'prediction_days.json').exists() or
+                                any((self.root/'monthly').glob('*/'+key+'.partial.nc'))):
+                            pinned='cuda'
+                    if pinned is not None and pinned!=backend:continue
                 rt.validate_task(key, task)
                 increment = max(0, rt.task_reservation(task) - task.get('reserved', 0)) if stage == 'cpu' else 0
                 if stage == 'cpu':
-                    if max(reserved + fixed, state.get('scratch_measured_bytes', 0)) + increment > self.c['scratch_budget_bytes']:
+                    if budget is None and max(reserved + fixed, state.get('scratch_measured_bytes', 0)) + increment > self.c['scratch_budget_bytes']:
                         state['admission_pause'] = {'reason': '256 GiB cache budget', 'at': now()}
                         return None
                     if shutil.disk_usage(self.c['scratch']).free < increment + self.c['scratch_min_free_bytes']:
@@ -243,16 +278,52 @@ class Queue(_ORIGINAL_QUEUE):
                         return None
                 lease = uuid.uuid4().hex
                 job, pid, host = rt.process_id()
+                if stage=='cpu' and budget is not None:
+                    from disk_budget import BudgetScanError
+                    try:
+                        reservation=budget.acquire(key,common.task_paths(self.c,key)[0],rt.task_reservation(task),
+                            owner=dict(job=job,pid=pid,host=host,region=self.root.name,task=key))
+                    except BudgetScanError as exc:
+                        state['admission_pause']=dict(reason=str(exc),at=now())
+                        return None
+                    if reservation is None:
+                        state['admission_pause']=dict(reason='actual global input budget',at=now())
+                        return None
+                    task['input_budget_lease']=reservation
                 task.update(job=job, pid=pid, host=host, lease=lease, stage=stage,
                             claim_generation=task.get('claim_generation', 0) + 1, updated=now())
                 if stage == 'cpu':
                     task.update(input_status='building', status='building', reserved=task.get('reserved', 0) + increment)
                 else:
-                    task.update(prediction_status='predicting', status='predicting')
+                    task.update(prediction_status='predicting', status='predicting',
+                                prediction_backend=backend)
                 state.pop('admission_pause', None)
                 rt._claims[(str(self.root), key)] = lease
                 return key, dict(task)
         return None
+
+    def update(self,key,**kw):
+        """Settle actual input bytes before relinquishing the writer lease."""
+        with self.edit() as state:
+            task=state['tasks'][key]
+            expected=rt._claims.get((str(self.root),key))
+            owner=(str(task.get('job')),task.get('pid'),task.get('host'))
+            if not expected or task.get('lease')!=expected or owner!=rt.process_id():
+                raise RuntimeError('Stale worker update refused: '+key)
+            status=kw.pop('status',None);kw.pop('reserved',None)
+            for field in ('lease','stage','host','job','pid'):kw.pop(field,None)
+            if status is not None and task['stage']=='cpu' and task.get('input_budget_lease'):
+                actual_budget(self.c).release(key,task['input_budget_lease'])
+                task.pop('input_budget_lease',None)
+            if status=='ready' and task['stage']=='cpu':task['input_status']='ready'
+            elif status=='done' and task['stage']=='gpu':task['prediction_status']='done'
+            elif status in {'blocked','queued'}:
+                task['input_status' if task['stage']=='cpu' else 'prediction_status']=status
+            elif status is not None:raise ValueError('Invalid event stage transition')
+            task.update(kw,updated=now());task['status']=rt.compatible_status(task)
+            if status is not None:
+                task.update(job=None,pid=None,host=None,lease=None,stage=None)
+                rt._claims.pop((str(self.root),key),None)
 
 
 def heartbeat(c, kind, **kw):
@@ -318,6 +389,9 @@ def activate(c, campaign_root):
     rt.Queue = Queue
     rt.heartbeat = heartbeat
     rt.verify_execution = verify_execution
+    import products
+    import batch_products
+    batch_products.activate_products(products)
     pipeline.safe_cleanup = rt.request_cleanup
     pipeline.worker_heartbeat = heartbeat
     common.worker_heartbeat = heartbeat
@@ -385,6 +459,9 @@ def recover(c, active_ids):
                     current = state['tasks'][key]
                     if current != task:
                         continue
+                    if stage=='cpu' and current.get('input_budget_lease'):
+                        actual_budget(c).release(key,current['input_budget_lease'])
+                        current.pop('input_budget_lease',None)
                     field = 'input_status' if stage == 'cpu' else 'prediction_status'
                     if restored:
                         current[field] = 'done'

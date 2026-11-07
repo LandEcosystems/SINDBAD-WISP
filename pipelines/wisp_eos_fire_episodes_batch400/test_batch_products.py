@@ -73,7 +73,7 @@ class BatchProductsTest(unittest.TestCase):
                           waves=[dict(wave_id=0, keys=self.keys[:2], days=8),
                                  dict(wave_id=1, keys=self.keys[2:], days=1)])
         b.p._atomic(self.root / 'state/queue.json', self.state)
-        self.adapter = types.SimpleNamespace(Queue=Queue, locked=locked)
+        self.adapter = types.SimpleNamespace(Queue=Queue, locked=locked, actual_budget=lambda c: None)
         self.patcher = patch.dict(sys.modules, adapter=self.adapter, runtime=self.adapter)
         self.patcher.start()
         self.addCleanup(self.patcher.stop)
@@ -154,6 +154,40 @@ class BatchProductsTest(unittest.TestCase):
         with patch.object(b.time, 'time', return_value=later), self.assertRaisesRegex(ValueError, 'checksum'):
             b.cleanup_wave(self.c)
         self.assertTrue((Path(self.c['scratch']) / 'inputs' / self.keys[0]).exists())
+
+    def test_cleanup_refreshes_actual_disk_budget_only_after_deletion(self):
+        later = self.authorize()
+        refreshed = []
+        def refresh(path):
+            self.assertFalse(Path(path).exists())
+            refreshed.append(Path(path).name)
+            return {'actual_input_bytes': 0}
+        self.adapter.actual_budget = lambda c: types.SimpleNamespace(refresh_path=refresh)
+        with patch.object(b.time, 'time', return_value=later):
+            self.assertTrue(b.cleanup_wave(self.c)['cleaned'])
+            self.assertEqual(refreshed, self.keys[:2])
+            # Durable cleanup receipts must not skip a retry's disk-ledger refresh.
+            self.assertTrue(b.cleanup_wave(self.c)['cleaned'])
+            self.assertEqual(refreshed, self.keys[:2] * 2)
+
+    def test_budget_refresh_failure_after_deletion_recovers_without_false_completion(self):
+        later = self.authorize()
+        attempts = []
+        def refresh(path):
+            self.assertFalse(Path(path).exists())
+            attempts.append(Path(path).name)
+            if len(attempts) == 1:
+                raise OSError('temporary budget ledger unavailable')
+        self.adapter.actual_budget = lambda c: types.SimpleNamespace(refresh_path=refresh)
+        with patch.object(b.time, 'time', return_value=later):
+            with self.assertRaisesRegex(OSError, 'ledger unavailable'):
+                b.cleanup_wave(self.c)
+            key = self.keys[0]
+            self.assertEqual(Queue(self.c).snapshot()['tasks'][key]['input_status'], 'ready')
+            self.assertTrue((self.root / 'manifests/tasks' / key / 'wave_cleanup_intent.json').exists())
+            self.assertFalse((self.root / 'manifests/tasks' / key / 'wave_cleanup.json').exists())
+            self.assertTrue(b.cleanup_wave(self.c)['cleaned'])
+        self.assertEqual(attempts, [self.keys[0], *self.keys[:2]])
 
     def test_partial_rmtree_recovers_with_intent_and_durable_hashes(self):
         later = self.authorize()
@@ -330,6 +364,128 @@ class BatchProductsTest(unittest.TestCase):
         self.assertNotEqual(pilot_manifest['selection_sha256'], new_manifest['selection_sha256'])
         result = b.verify_reuse(self.root, new_c)
         self.assertEqual(result['path'], old_final['path'])
+
+
+    def make_cpu_chunk(self, key):
+        path = self.root / 'manifests/tasks' / key / 'output.json'
+        receipt = b.p._read(path)
+        metadata = dict(inference_backend='cpu', precision='float32', batch_size=1,
+                        hardware='Intel Xeon test', provenance_source='explicit')
+        with nc.Dataset(receipt['path'], 'a') as ds:
+            ds.setncatts(metadata)
+        receipt.update(metadata, sha256=b.p._sha(receipt['path']))
+        b.p._atomic(path, receipt)
+        journal_path = self.root / 'manifests/tasks' / key / 'prediction_days.json'
+        journal = b.p._read(journal_path)
+        for day in journal.values():
+            day['timing'] = metadata
+        b.p._atomic(journal_path, journal)
+        return receipt
+
+    def test_cpu_chunk_requires_explicit_matching_backend_and_daily_journal(self):
+        key = self.keys[0]
+        receipt = self.make_cpu_chunk(key)
+        self.assertTrue(b.validate_chunk_provenance(self.c, key, receipt, self.tasks[key])['passed'])
+        bad = dict(receipt, precision='bfloat16')
+        with self.assertRaisesRegex(ValueError, 'precision'):
+            b.validate_chunk_provenance(self.c, key, bad, self.tasks[key])
+        journal_path = self.root / 'manifests/tasks' / key / 'prediction_days.json'
+        journal = b.p._read(journal_path)
+        journal['0']['timing']['inference_backend'] = 'cuda'
+        b.p._atomic(journal_path, journal)
+        with self.assertRaisesRegex(ValueError, 'daily prediction journal'):
+            b.validate_chunk_provenance(self.c, key, receipt, self.tasks[key])
+
+    def test_mixed_final_retains_daily_backend_without_changing_scientific_values(self):
+        cpu_key = self.keys[1]
+        self.make_cpu_chunk(cpu_key)
+        original = []
+        for key in self.keys:
+            with nc.Dataset(self.root / 'monthly/REG' / (key + '.nc')) as ds:
+                original.append(np.asarray(ds['wisp_eos_fire_score'][:]))
+        self.clean_all_inputs()
+        final = b.finalize_region(self.c)
+        with nc.Dataset(final['path']) as ds:
+            np.testing.assert_array_equal(ds['wisp_eos_fire_score'][:], np.concatenate(original))
+            expected_device = np.concatenate([np.full(len(self.tasks[k]['dates']), 2 if k == cpu_key else 1)
+                                              for k in self.keys])
+            np.testing.assert_array_equal(ds['inference_device_code'][:], expected_device)
+            np.testing.assert_array_equal(ds['inference_precision_code'][:], expected_device)
+            np.testing.assert_array_equal(ds['inference_batch_size'][:], np.where(expected_device == 2, 1, 8))
+            np.testing.assert_array_equal(ds['inference_provenance_source_code'][:], np.where(expected_device == 2, 1, 2))
+            self.assertEqual(ds.precision, 'mixed')
+            self.assertEqual(ds.inference_backend, 'mixed')
+            self.assertEqual(ds.batch_size, 0)
+            catalog = json.loads(ds.inference_backend_catalog_json)
+            self.assertEqual({r['hardware'] for r in catalog}, {'A100', 'Intel Xeon test'})
+        self.assertEqual(b.finalize_region(self.c), final)
+
+    def test_cpu_resume_processor_change_remains_traceable_per_date(self):
+        key = self.keys[0]
+        receipt = self.make_cpu_chunk(key)
+        hardware = ['Intel model A'] * receipt['days']
+        hardware[-1] = 'Intel model B'
+        with nc.Dataset(receipt['path'], 'a') as ds:
+            ds.hardware = 'CPU'
+        receipt.update(hardware='CPU', inference_hardware_by_day=hardware,
+                       cpu_processor_models=sorted(set(hardware)), sha256=b.p._sha(receipt['path']))
+        b.p._atomic(self.root / 'manifests/tasks' / key / 'output.json', receipt)
+        journal_path = self.root / 'manifests/tasks' / key / 'prediction_days.json'
+        journal = b.p._read(journal_path)
+        for index, model in enumerate(hardware):
+            journal[str(index)]['timing']['hardware'] = model
+        b.p._atomic(journal_path, journal)
+        self.assertTrue(b.validate_chunk_provenance(self.c, key, receipt, self.tasks[key])['passed'])
+        self.clean_all_inputs()
+        final = b.finalize_region(self.c)
+        with nc.Dataset(final['path']) as ds:
+            catalog = json.loads(ds.inference_backend_catalog_json)
+            ids = ds['inference_backend_id'][:len(hardware)]
+            self.assertEqual([catalog[i]['hardware'] for i in ids], hardware)
+
+    def test_cpu_first_chunk_merges_with_legacy_gpu(self):
+        self.make_cpu_chunk(self.keys[0])
+        self.clean_all_inputs()
+        final = b.finalize_region(self.c)
+        with nc.Dataset(final['path']) as ds:
+            self.assertEqual(ds['inference_device_code'][0], 2)
+            self.assertEqual(ds['inference_device_code'][-1], 1)
+
+    def test_tampered_daily_backend_rejected_even_with_refreshed_file_checksum(self):
+        self.make_cpu_chunk(self.keys[1])
+        self.clean_all_inputs()
+        final = b.finalize_region(self.c)
+        with nc.Dataset(final['path'], 'a') as ds:
+            ds['inference_device_code'][0] = 2
+        receipt_path = b.p._final_paths(self.c, self.region)[1]
+        receipt = b.p._read(receipt_path)
+        receipt['sha256'] = b.p._sha(final['path'])
+        b.p._atomic(receipt_path, receipt)
+        with self.assertRaisesRegex(ValueError, 'Daily inference provenance'):
+            b.p.validate_final(self.c, self.region, self.tasks)
+
+    def test_unidentified_legacy_device_cannot_be_silently_labeled_gpu(self):
+        with self.assertRaisesRegex(ValueError, 'Unidentified legacy'):
+            b._backend_record(dict(hardware='Intel CPU', precision='bfloat16', batch_size=8))
+
+    def test_prediction_reader_shared_lock_prevents_cleanup(self):
+        later = self.authorize()
+        path = self.root / 'locks/prediction_readers.lock'
+        with path.open('a+') as stream:
+            fcntl.flock(stream, fcntl.LOCK_SH)
+            with patch.object(b.time, 'time', return_value=later):
+                result = b.cleanup_wave(self.c)
+            self.assertTrue(result['pending'])
+            self.assertIn('regional prediction reader', result['reason'])
+            self.assertTrue((Path(self.c['scratch']) / 'inputs' / self.keys[0]).exists())
+            fcntl.flock(stream, fcntl.LOCK_UN)
+        with patch.object(b.time, 'time', return_value=later):
+            self.assertTrue(b.cleanup_wave(self.c)['cleaned'])
+
+    def test_activation_is_idempotent(self):
+        first = b.p.validate_chunk
+        self.assertIs(b.activate_products(), b.p)
+        self.assertIs(first, b.p.validate_chunk)
 
 
 if __name__ == '__main__':

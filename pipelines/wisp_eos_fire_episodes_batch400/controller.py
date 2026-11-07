@@ -42,6 +42,7 @@ def submit(root,kind,token=None,lane=None,dependency=None):
             cs=[j for j in current if j['kind']=='control']
             if cs and not (len(cs)==1 and cs[0]['id']==str(dependency)):return None
         elif kind in {'scan','gpu'} and any(j['kind']==kind for j in current):return None
+        elif kind=='cpu-infer' and sum(j['kind']=='cpu-infer' for j in current)>=cfg.get('max_cpu_consumers',0):return None
         elif token and kind!='cpu' and any(j['kind']==kind and j['token']==token for j in current):return None
         if kind!='gpu':
             if sum(j['kind']!='gpu' for j in current)>=cfg['max_cpu_jobs']:return None
@@ -52,7 +53,8 @@ def submit(root,kind,token=None,lane=None,dependency=None):
                 'control':(1,'2G','24:00:00'),'scan':(4,'16G','24:00:00'),
                 'cpu':(4,'16G','24:00:00'),'verify':(4,'16G','24:00:00'),
                 'wave':(2,'8G','24:00:00'),'cleanup':(1,'4G','24:00:00'),
-                'final':(2,'8G','24:00:00'),'gpu':(8,'64G','24:00:00')}[kind]
+                'final':(2,'8G','24:00:00'),'gpu':(8,'64G','24:00:00'),
+                'cpu-infer':(8,'32G','24:00:00')}[kind]
             name=PREFIX+kind
             args=['sbatch','--parsable','--account=science','--qos=normal',
                   '--job-name='+name,'--partition='+('gpu' if kind=='gpu' else cfg['partitions']),
@@ -174,13 +176,21 @@ def phase_job(root,token,kind):
         receipt=finalize_region(c)
         with q.edit() as s:s.update(phase='COMPLETE',completed_at=now(),final=receipt)
 
-def ready_gpu_regions(root):
+def ready_gpu_regions(root, backend=None):
     state=read(Path(root)/'state/campaign.json');ready=[]
     for token in state['lanes']:
         if not token:continue
         p=Path(root)/'regions'/token/'state/queue.json'
         s=read(p)
-        if s['phase']=='PREDICT' and any(s['tasks'][k]['prediction_status']!='done'
+        def compatible(key):
+            task=s['tasks'][key];pin=task.get('prediction_backend')
+            rr=Path(root)/'regions'/token
+            if pin is None and ((rr/'manifests/tasks'/key/'prediction_days.json').exists()
+                                or any((rr/'monthly').glob('*/'+key+'.partial.nc'))):pin='cuda'
+            return backend is None or pin is None or pin==backend
+        if s['phase']=='PREDICT' and any(s['tasks'][k]['prediction_status']=='queued'
+                and not s['tasks'][k].get('lease')
+                and compatible(k)
                 for k in s['waves'][s['active_wave']]['keys']):
             ready.append((s.get('inputs_verified_at',''),token))
     return [t for _,t in sorted(ready)]
@@ -191,13 +201,14 @@ def gpu(root):
     model=None;idle_since=time.monotonic();started=time.monotonic()
     with locked(Path(root)/'locks/gpu_consumer.lock',False):
         while not STOP and time.monotonic()-started<23*3600:
-            ready=ready_gpu_regions(root)
+            ready=ready_gpu_regions(root,'cuda')
             if not ready:
                 if time.monotonic()-idle_since>=300:return
                 time.sleep(10);continue
             token=ready[0];c,ad=activate(root,token)
             try:
-                model=ad.gpu(c,model=model)
+                with ad.prediction_reader(c):
+                    model=ad.gpu(c,model=model)
                 if ad.rt.STOP:return
                 q=ad.Queue(c)
                 with q.edit() as s:
@@ -209,6 +220,28 @@ def gpu(root):
                 record_failure(root,token,'gpu',exc)
                 # A device failure must not contaminate subsequent regions.
                 raise
+
+def cpu_infer(root):
+    """CPU consumers use the same prediction leases as the GPU consumer."""
+    import cpu_consumer
+    os.environ['WISP_INFERENCE_BACKEND']='cpu'
+    model=None;started=time.monotonic();idle_since=started
+    while not STOP and time.monotonic()-started<23*3600:
+        if (Path(root)/'state/STOP').exists():return
+        ready=ready_gpu_regions(root,'cpu')
+        if not ready:
+            if time.monotonic()-idle_since>=300:return
+            time.sleep(10);continue
+        token=ready[0];c,ad=activate(root,token)
+        try:
+            with ad.prediction_reader(c):
+                model,count=cpu_consumer.run_region(c,model=model,max_tasks=1,stop_requested=lambda:STOP)
+            if ad.rt.STOP:return
+            if count:idle_since=time.monotonic()
+            else:time.sleep(1)
+        except Exception as exc:
+            record_failure(root,token,'cpu-infer',exc)
+            raise
 
 def pilot_gate(root,state):
     if state.get('pilot_passed'):return True
@@ -280,8 +313,45 @@ def admit_more_inputs(root, state, cfg):
             building += queue['phase']=='BUILD'
     if building >= cfg['max_build_regions']:
         return False
+    if cfg.get('input_budget_mode')=='actual':
+        return input_budget_available(root,cfg)
     free = shutil.disk_usage(cfg['scratch']).free
     return free >= cfg['region_budget_bytes'] + cfg.get('backlog_min_free_bytes',0)
+
+def input_budget_available(root,cfg):
+    if cfg.get('input_budget_mode')!='actual':return True
+    import disk_budget
+    budget=disk_budget.ActualInputBudget(root,cfg['scratch'],limit_bytes=cfg['backlog_budget_bytes'],
+        scan_interval_seconds=cfg.get('input_budget_scan_seconds',3600))
+    try:snapshot=budget.snapshot()
+    except disk_budget.BudgetScanError as exc:
+        atomic(Path(root)/'reports/input_disk_budget.json',dict(at=now(),admission_paused=True,error=str(exc)))
+        return False
+    atomic(Path(root)/'reports/input_disk_budget.json',snapshot)
+    if snapshot.get('bound_violation'):return False
+    # A new worker must be able to finish at least one maximum-size short block.
+    headroom=cfg.get('input_write_headroom_bytes',2*GIB)
+    return (snapshot['charged_bytes']+headroom <= cfg['backlog_budget_bytes']
+            and shutil.disk_usage(cfg['scratch']).free>=headroom+cfg.get('backlog_min_free_bytes',0))
+
+def recover_input_budget(root,cfg,current):
+    """Orphan reservations require scheduler-confirmed termination, never age."""
+    path=Path(root)/'state/actual_input_budget.json'
+    if cfg.get('input_budget_mode')!='actual' or not path.exists():return
+    live={str(j['id']) for j in current}
+    missing={str(w['owner']['job']) for w in read(path)['writers'].values()
+             if w.get('owner',{}).get('job') and str(w['owner']['job']) not in live}
+    if not missing:return
+    result=subprocess.run(['sacct','-X','-n','-P','-j',','.join(sorted(missing)),'-o','JobIDRaw,State'],
+                          check=True,text=True,capture_output=True,timeout=30)
+    terminal={'COMPLETED','FAILED','CANCELLED','TIMEOUT','OUT_OF_MEMORY','NODE_FAIL','PREEMPTED','BOOT_FAIL','DEADLINE'}
+    dead=[]
+    for row in result.stdout.splitlines():
+        fields=row.split('|')
+        if len(fields)>1 and fields[1].split() and fields[1].split()[0] in terminal:dead.append(fields[0])
+    if dead:
+        from disk_budget import ActualInputBudget
+        ActualInputBudget(root,cfg['scratch'],limit_bytes=cfg['backlog_budget_bytes']).reconcile_stopped_jobs(dead)
 
 def record_failure(root,token,kind,exc):
     import errno,traceback
@@ -325,6 +395,8 @@ def report_status(root,current):
             admission_pause=s.get('admission_pause'))
     r=dict(at=now(),phase=state['phase'],regions=dict(counts),active=details,
         jobs=current,cpu_jobs=sum(j['kind']!='gpu' for j in current),gpu_jobs=sum(j['kind']=='gpu' for j in current),
+        producer_jobs=sum(j['kind']=='cpu' for j in current),
+        cpu_prediction_jobs=sum(j['kind']=='cpu-infer' for j in current),
         lane_limit=state['lane_limit'],producer_cap=state.get('producer_cap',30),
         selected_days_known=sum(r.get('selected_days',0) for r in state['regions'].values()),
         predicted_days=completed_days,active_input_days=input_days,
@@ -346,6 +418,8 @@ def control(root,once=False):
                 submit(root,'scan')
             if state['scan_complete']:
                 cfg=read(root/'config/campaign.json')
+                recover_input_budget(root,cfg,current)
+                can_produce=input_budget_available(root,cfg)
                 # A cleaned wave may return to BUILD while ten other regions
                 # are already building. Do not interrupt current owners; admit
                 # producer jobs for at most the configured number of regions.
@@ -403,7 +477,7 @@ def control(root,once=False):
                         if all(t['input_status'] in {'ready','cleaned'} and not t.get('lease') for t in tasks):
                             with q.edit() as d:d['phase']='INPUT_VERIFY'
                         elif not own or any(j['kind']=='cpu' for j in own):
-                            if token not in admitted_builds:continue
+                            if token not in admitted_builds or not can_produce:continue
                             cap=state.get('producer_cap',30) if state.get('pilot_passed') else 2
                             workers=sorted(j['id'] for j in own if j['kind']=='cpu')
                             with q.edit() as d:
@@ -413,7 +487,7 @@ def control(root,once=False):
                             for _ in range(producer_target(pending,sum(j['kind']=='cpu' for j in own),cap)):
                                 if submit(root,'cpu',token,lane) is None:break
                     elif s['phase']=='PREDICT':
-                        if not any(j['kind']=='gpu' for j in current) and all(t['prediction_status']=='done' and not t.get('lease') for t in tasks):
+                        if all(t['prediction_status']=='done' and not t.get('lease') for t in tasks):
                             with q.edit() as d:d['phase']='WAVE_VERIFY'
                     elif s['phase'] in {'INPUT_VERIFY','WAVE_VERIFY','CLEANUP_WAIT','MERGE'}:
                         kind={'INPUT_VERIFY':'verify','WAVE_VERIFY':'wave','CLEANUP_WAIT':'cleanup','MERGE':'final'}[s['phase']]
@@ -449,7 +523,10 @@ def control(root,once=False):
                             d.setdefault('pilot_tokens',[])
                             if token not in d['pilot_tokens']:d['pilot_tokens'].append(token)
                     state=read(root/'state/campaign.json')
-                if ready_gpu_regions(root):submit(root,'gpu')
+                if ready_gpu_regions(root,'cuda'):submit(root,'gpu')
+                if ready_gpu_regions(root,'cpu'):
+                    for _ in range(cfg.get('max_cpu_consumers',0)):
+                        if submit(root,'cpu-infer') is None:break
                 if state.get('pilot_passed') and time.time()-last_perf>=300:
                     perf=performance(root,state['lanes']);atomic(root/'reports/io_monitor.json',perf)
                     if perf['io_pressure'] and cfg.get('io_policy','adaptive')=='adaptive':
@@ -472,7 +549,7 @@ def control(root,once=False):
                 raise RuntimeError('Controller renewal was not admitted')
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('command',choices=['submit-control','control','once','scan','cpu','cpu-one','verify','wave','cleanup','final','gpu','status','migrate-init','migrate-region','migrate-finish'])
+    p=argparse.ArgumentParser();p.add_argument('command',choices=['submit-control','control','once','scan','cpu','cpu-one','cpu-infer','verify','wave','cleanup','final','gpu','status','migrate-init','migrate-region','migrate-finish'])
     p.add_argument('token',nargs='?');p.add_argument('--root',type=Path,default=Path(os.environ.get('WISP_CAMPAIGN_ROOT',DEFAULT_ROOT)))
     a=p.parse_args();root=a.root;verify_release(root)
     def stop(sig,frame):
@@ -503,6 +580,7 @@ def main():
             c,ad=activate(root,a.token);ad.cpu_one(c)
         elif a.command in {'verify','wave','cleanup','final'}:phase_job(root,a.token,a.command)
         elif a.command=='gpu':gpu(root)
+        elif a.command=='cpu-infer':cpu_infer(root)
         else:report_status(root,jobs(root))
     except Exception as exc:
         record_failure(root,a.token,a.command,exc)

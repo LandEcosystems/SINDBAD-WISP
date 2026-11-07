@@ -107,6 +107,28 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Stale'):
             self.q.update(key, status='ready')
 
+    def test_cpu_gpu_share_claim_and_partial_backend_pin(self):
+        key,_=self.q.claim('cpu');self.q.update(key,status='ready')
+        with self.q.edit() as state:state['phase']='PREDICT'
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cpu'}):
+            self.assertEqual(self.q.claim('gpu')[0],key)
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cuda'}):
+            self.assertIsNone(self.q.claim('gpu'))
+        self.q.update(key,status='queued')
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cuda'}):
+            self.assertIsNone(self.q.claim('gpu'))
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cpu'}):
+            self.assertEqual(self.q.claim('gpu')[0],key)
+
+    def test_legacy_gpu_journal_is_not_recomputed_on_cpu(self):
+        key,_=self.q.claim('cpu');self.q.update(key,status='ready')
+        self.put('manifests/tasks/'+key+'/prediction_days.json',{})
+        with self.q.edit() as state:state['phase']='PREDICT'
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cpu'}):
+            self.assertIsNone(self.q.claim('gpu'))
+        with mock.patch.dict(os.environ,{'WISP_INFERENCE_BACKEND':'cuda'}):
+            self.assertEqual(self.q.claim('gpu')[0],key)
+
     def test_reduced_job_allowlist_stops_only_new_chunk_claims(self):
         with mock.patch.dict(os.environ, {'SLURM_JOB_ID': '101'}):
             key, task = self.q.claim('cpu')

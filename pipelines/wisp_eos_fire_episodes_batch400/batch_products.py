@@ -7,6 +7,7 @@ before other waves of the same region have been prepared.
 from __future__ import annotations
 
 import contextlib
+import fcntl
 import importlib.util
 import os
 from pathlib import Path
@@ -157,7 +158,7 @@ def _no_symlinks(path):
                 raise ValueError('Symlink inside registered input tree')
 
 
-def cleanup_wave(c):
+def _cleanup_wave_impl(c):
     """Remove only verified wave inputs after 600 seconds, leases and locks.
 
     Per-day input hashes, registrations and all predictions remain durable. A
@@ -165,6 +166,7 @@ def cleanup_wave(c):
     """
     import adapter
     q = adapter.Queue(c)
+    budget = adapter.actual_budget(c)
     root = Path(c['root'])
     with adapter.locked(root / 'locks/products/wave.lock'):
         queue = q.snapshot()
@@ -223,11 +225,31 @@ def cleanup_wave(c):
                     _no_symlinks(input_path)
                     if input_path.exists():
                         shutil.rmtree(input_path)
+                    if budget is not None:
+                        # Release measured bytes immediately after physical deletion.
+                        # Repeating this after an interrupted cleanup is safe: a
+                        # missing registered store is measured as zero, never credited twice.
+                        budget.refresh_path(input_path)
                     p._atomic(meta / 'wave_cleanup.json', dict(record, completed=p._now()))
                     current['tasks'][key].update(input_status='cleaned', reserved=0,
                                                 cleaned_at=p._now(), updated=p._now())
         return dict(cleaned=True, wave_id=wave['wave_id'], chunks=len(plans),
                     wave_receipt_sha256=p._sha(path))
+
+
+def cleanup_wave(c):
+    """Never delete while a CPU/GPU regional reader (including preflight) is active."""
+    path = Path(c['root']) / 'locks/prediction_readers.lock'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a+') as stream:
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return dict(cleaned=False, pending=True, reason='active regional prediction reader')
+        try:
+            return _cleanup_wave_impl(c)
+        finally:
+            fcntl.flock(stream, fcntl.LOCK_UN)
 
 
 def cleanup_final_chunks(c, region, tasks, final):
@@ -465,3 +487,260 @@ def verify_reuse(oldroot, c):
     p._atomic(root / 'reports/reuse.json', receipt)
     p._atomic(root / 'reports/final.json', receipt)
     return receipt
+
+
+# Backend provenance is an operational extension. The frozen pilot file and all
+# numerical arrays remain unchanged; its private/module-local validators are
+# wrapped so an explicitly authorized CPU result is never mislabeled as CUDA.
+BACKEND_VARS = {
+    'inference_backend_id', 'inference_device_code', 'inference_precision_code',
+    'inference_batch_size', 'inference_provenance_source_code',
+}
+BACKEND_POLICY = {'cuda': ('bfloat16', 8), 'cpu': ('float32', 1)}
+
+
+def _backend_record(metadata, *, receipt=False):
+    """Resolve explicit metadata, or audited legacy A100/bfloat16 metadata."""
+    backend = metadata.get('inference_backend')
+    hardware = metadata.get('hardware')
+    if not isinstance(hardware, str) or not hardware.strip():
+        raise ValueError('Inference provenance lacks hardware identity')
+    legacy = backend is None
+    if legacy:
+        # Absence alone cannot establish a CPU/GPU identity. Existing audited
+        # products were exclusively A100 batch=8/bfloat16; require that evidence.
+        if 'A100' not in hardware:
+            raise ValueError('Unidentified legacy inference hardware')
+        backend = 'cuda'
+    if backend == 'gpu':
+        backend = 'cuda'
+    if backend not in BACKEND_POLICY:
+        raise ValueError('Unsupported inference backend: ' + str(backend))
+    precision, batch = BACKEND_POLICY[backend]
+    if metadata.get('precision', precision if legacy and receipt else None) != precision:
+        raise ValueError('Inference provenance precision differs')
+    if metadata.get('batch_size', batch if legacy and receipt else None) != batch:
+        raise ValueError('Inference provenance batch size differs')
+    return dict(inference_backend=backend, precision=precision, batch_size=batch,
+                hardware=hardware, provenance_source=('legacy_frozen_gpu_metadata'
+                                                       if legacy else 'explicit'))
+
+
+def _dataset_backend(ds, receipt=None):
+    metadata = {name: ds.getncattr(name) for name in ds.ncattrs()}
+    record = _backend_record(metadata)
+    if receipt is not None:
+        other = _backend_record(receipt, receipt=True)
+        if other != record:
+            raise ValueError('Chunk receipt inference provenance differs from file')
+    return record
+
+
+def _read_backend_catalog(ds):
+    import json
+    present = BACKEND_VARS.intersection(ds.variables)
+    if not present:
+        return None
+    if present != BACKEND_VARS:
+        raise ValueError('Incomplete per-day inference provenance variables')
+    try:
+        catalog = json.loads(ds.getncattr('inference_backend_catalog_json'))
+    except (AttributeError, ValueError, TypeError) as exc:
+        raise ValueError('Missing or invalid inference backend catalog') from exc
+    if not isinstance(catalog, list) or not catalog:
+        raise ValueError('Empty inference backend catalog')
+    normalized = []
+    for record in catalog:
+        if not isinstance(record, dict):
+            raise ValueError('Invalid inference backend catalog item')
+        # The explicit backend is retained in each normalized catalog item;
+        # legacy source remains separately traceable, not reclassified explicit.
+        source = record.get('provenance_source')
+        if source not in {'explicit', 'legacy_frozen_gpu_metadata'}:
+            raise ValueError('Unknown inference provenance source')
+        expected = _backend_record(record, receipt=True)
+        if source == 'legacy_frozen_gpu_metadata' and (
+                expected['inference_backend'] != 'cuda' or 'A100' not in expected['hardware']):
+            raise ValueError('Invalid legacy backend attribution')
+        expected['provenance_source'] = source
+        if record != expected or record in normalized:
+            raise ValueError('Duplicate or inconsistent inference backend catalog')
+        normalized.append(expected)
+    n = len(ds.dimensions['time'])
+    for name in BACKEND_VARS:
+        if ds[name].dimensions != ('time',) or ds[name].dtype.kind not in 'iu':
+            raise ValueError('Incorrect per-day inference provenance schema: ' + name)
+    ids = np.asarray(ds['inference_backend_id'][:])
+    if ids.shape != (n,) or np.any(ids < 0) or np.any(ids >= len(catalog)):
+        raise ValueError('Invalid daily inference backend IDs')
+    for index, record in enumerate(catalog):
+        mask = ids == index
+        expected = dict(inference_device_code=1 if record['inference_backend'] == 'cuda' else 2,
+                        inference_precision_code=1 if record['precision'] == 'bfloat16' else 2,
+                        inference_batch_size=record['batch_size'],
+                        inference_provenance_source_code=1 if record['provenance_source'] == 'explicit' else 2)
+        for name, value in expected.items():
+            if not np.all(np.asarray(ds[name][:])[mask] == value):
+                raise ValueError('Daily inference provenance disagrees with catalog: ' + name)
+    summary = _backend_summary(catalog)
+    for name, value in summary.items():
+        if ds.getncattr(name) != value:
+            raise ValueError('Global inference provenance disagrees with daily catalog: ' + name)
+    return catalog, ids
+
+
+def _backend_summary(catalog):
+    def common(name, fallback):
+        values = {r[name] for r in catalog}
+        return next(iter(values)) if len(values) == 1 else fallback
+    return dict(inference_backend=common('inference_backend', 'mixed'),
+                precision=common('precision', 'mixed'),
+                batch_size=common('batch_size', 0),
+                hardware=','.join(sorted({r['hardware'] for r in catalog})))
+
+
+class _FrozenMetadataView:
+    """Reuse every frozen science check while validating backend attrs separately."""
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def __getattr__(self, name):
+        return getattr(self.dataset, name)
+
+    def __getitem__(self, name):
+        return self.dataset[name]
+
+    def getncattr(self, name):
+        return {'precision': 'bfloat16', 'batch_size': 8}.get(name, self.dataset.getncattr(name))
+
+
+def _daily_backend_records(receipt):
+    record = _backend_record(receipt, receipt=True)
+    n = receipt['days']
+    hardware = receipt.get('inference_hardware_by_day')
+    if hardware is None:
+        return [record] * n
+    if (record['inference_backend'] != 'cpu' or not isinstance(hardware, list)
+            or len(hardware) != n or any(not isinstance(value, str) or not value.strip() for value in hardware)):
+        raise ValueError('Invalid daily CPU processor receipt')
+    if set(receipt.get('cpu_processor_models', [])) != set(hardware):
+        raise ValueError('CPU processor summary disagrees with per-day receipt')
+    return [dict(record, hardware=value) for value in hardware]
+
+
+def _validate_backend_journal(c, key, receipt):
+    with nc.Dataset(receipt['path']) as ds:
+        record = _dataset_backend(ds, receipt)
+    if record['inference_backend'] != 'cpu':
+        return
+    journal = p._read(Path(c['root']) / 'manifests/tasks' / key / 'prediction_days.json')
+    records = _daily_backend_records(receipt)
+    for index, expected in enumerate(records):
+        day = journal[str(index)]
+        metadata = day.get('timing', day)
+        for name in ('inference_backend', 'precision', 'batch_size', 'hardware', 'provenance_source'):
+            if metadata.get(name) != expected[name]:
+                raise ValueError('CPU daily prediction journal lacks matching provenance: ' + name)
+
+
+def _append_merged_provenance(path, receipts):
+    import json
+    catalog, ids = [], []
+    for receipt in receipts:
+        with nc.Dataset(receipt['path']) as src:
+            record = _dataset_backend(src, receipt)
+        for day_record in _daily_backend_records(receipt):
+            if day_record not in catalog:
+                catalog.append(day_record)
+            ids.append(catalog.index(day_record))
+    with nc.Dataset(path, 'a') as ds:
+        if len(ids) != len(ds.dimensions['time']):
+            raise ValueError('Merged provenance date count differs')
+        if BACKEND_VARS.intersection(ds.variables):
+            raise ValueError('Unexpected pre-existing provenance in merge target')
+        ds.setncatts(_backend_summary(catalog))
+        ds.inference_backend_catalog_json = json.dumps(catalog, sort_keys=True)
+        ds.inference_provenance_note = (
+            'Per-day backend, precision, batch size and hardware are recorded. '
+            'CPU float32 and CUDA bfloat16 outputs may differ numerically. '
+            'Legacy CUDA attribution is inferred from validated frozen A100 file metadata, '
+            'rather than a contemporaneous per-day device journal.')
+        ids = np.asarray(ids, dtype='i2')
+        values = dict(inference_backend_id=ids,
+            inference_device_code=np.asarray([1 if catalog[i]['inference_backend'] == 'cuda' else 2 for i in ids], dtype='u1'),
+            inference_precision_code=np.asarray([1 if catalog[i]['precision'] == 'bfloat16' else 2 for i in ids], dtype='u1'),
+            inference_batch_size=np.asarray([catalog[i]['batch_size'] for i in ids], dtype='i2'),
+            inference_provenance_source_code=np.asarray([1 if catalog[i]['provenance_source'] == 'explicit' else 2 for i in ids], dtype='u1'))
+        descriptions = {
+            'inference_backend_id': 'Zero-based entry in inference_backend_catalog_json',
+            'inference_device_code': '1=CUDA GPU; 2=CPU',
+            'inference_precision_code': '1=bfloat16 autocast; 2=float32',
+            'inference_batch_size': 'Requested inference batch size; final partial batch may be smaller',
+            'inference_provenance_source_code': '1=explicit backend metadata; 2=inferred from validated legacy frozen GPU metadata',
+        }
+        for name, value in values.items():
+            var = ds.createVariable(name, value.dtype, ('time',), fill_value=False, zlib=True, complevel=3)
+            var.long_name = descriptions[name]
+            var[:] = value
+        ds.sync()
+        _read_backend_catalog(ds)
+    with Path(path).open('rb') as stream:
+        os.fsync(stream.fileno())
+
+
+def activate_products(module=None):
+    """Idempotently extend a loaded pilot products module, never its source file."""
+    module = p if module is None else module
+    if getattr(module, '_batch400_mixed_products_active', False):
+        return module
+    original_dataset = module._validate_dataset
+    original_chunk = module.validate_chunk
+    original_merge = module._stream_merge
+    original_final = module.validate_final
+
+    def validate_dataset(ds, c, region, dates, monthly_receipt=None):
+        original_dataset(_FrozenMetadataView(ds), c, region, dates, monthly_receipt)
+        if _read_backend_catalog(ds) is None:
+            _dataset_backend(ds, monthly_receipt)
+        elif monthly_receipt is not None:
+            raise ValueError('Final-product provenance unexpectedly found in a chunk')
+
+    def validate_chunk(c, key, receipt, task=None):
+        result = original_chunk(c, key, receipt, task)
+        _validate_backend_journal(c, key, receipt)
+        return result
+
+    def stream_merge(c, region, receipts, temporary, dates, episode_ids, episodes, selection_sha):
+        original_merge(c, region, receipts, temporary, dates, episode_ids, episodes, selection_sha)
+        _append_merged_provenance(temporary, receipts)
+        with nc.Dataset(temporary) as ds:
+            validate_dataset(ds, c, region, dates)
+
+    def validate_final(c, region, tasks, selection=None):
+        result = original_final(c, region, tasks, selection)
+        with nc.Dataset(result['path']) as ds:
+            resolved = _read_backend_catalog(ds)
+            if resolved is not None:
+                catalog, ids = resolved
+                expected = []
+                for receipt in result['chunk_receipts']:
+                    expected.extend(_daily_backend_records(receipt))
+                if len(expected) != len(ids) or any(catalog[i] != record for i, record in zip(ids, expected)):
+                    raise ValueError('Final daily backend provenance differs from immutable chunk receipts')
+        return result
+
+    module._validate_dataset = validate_dataset
+    module.validate_chunk = validate_chunk
+    module.validate_month = validate_chunk
+    module._stream_merge = stream_merge
+    module.validate_final = validate_final
+    module._batch400_mixed_products_active = True
+    return module
+
+
+def validate_chunk_provenance(c, key, receipt, task=None):
+    """Consumer-facing validator for either explicitly pinned CPU or GPU output."""
+    return activate_products().validate_chunk(c, key, receipt, task)
+
+
+activate_products()
