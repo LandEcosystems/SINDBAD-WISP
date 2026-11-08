@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 import types
+import multiprocessing
 import unittest
 from unittest.mock import patch
 
@@ -31,6 +32,14 @@ def locked(path, blocking=True):
             yield
         finally:
             fcntl.lockf(stream, fcntl.LOCK_UN)
+
+
+def hold_reader(path, ready, stop):
+    with open(path, 'a+') as stream:
+        fcntl.lockf(stream, fcntl.LOCK_SH)
+        ready.set()
+        stop.wait(10)
+
 
 
 class Queue:
@@ -471,14 +480,21 @@ class BatchProductsTest(unittest.TestCase):
     def test_prediction_reader_shared_lock_prevents_cleanup(self):
         later = self.authorize()
         path = self.root / 'locks/prediction_readers.lock'
-        with path.open('a+') as stream:
-            fcntl.flock(stream, fcntl.LOCK_SH)
+        ctx = multiprocessing.get_context('fork')
+        ready, stop = ctx.Event(), ctx.Event()
+        reader = ctx.Process(target=hold_reader, args=(str(path), ready, stop))
+        reader.start()
+        try:
+            self.assertTrue(ready.wait(3))
             with patch.object(b.time, 'time', return_value=later):
                 result = b.cleanup_wave(self.c)
             self.assertTrue(result['pending'])
             self.assertIn('regional prediction reader', result['reason'])
             self.assertTrue((Path(self.c['scratch']) / 'inputs' / self.keys[0]).exists())
-            fcntl.flock(stream, fcntl.LOCK_UN)
+        finally:
+            stop.set()
+            reader.join(10)
+        self.assertEqual(reader.exitcode, 0)
         with patch.object(b.time, 'time', return_value=later):
             self.assertTrue(b.cleanup_wave(self.c)['cleaned'])
 

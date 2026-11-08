@@ -243,13 +243,13 @@ def cleanup_wave(c):
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a+') as stream:
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.lockf(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             return dict(cleaned=False, pending=True, reason='active regional prediction reader')
         try:
             return _cleanup_wave_impl(c)
         finally:
-            fcntl.flock(stream, fcntl.LOCK_UN)
+            fcntl.lockf(stream, fcntl.LOCK_UN)
 
 
 def cleanup_final_chunks(c, region, tasks, final):

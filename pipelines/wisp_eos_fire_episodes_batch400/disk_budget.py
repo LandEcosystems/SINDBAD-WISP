@@ -89,7 +89,9 @@ class ActualInputBudget:
     def _edit(self):
         self.lock_path.parent.mkdir(parents=True, exist_ok=True)
         with self.lock_path.open('a+') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
+            # StorNext/CVFS flock is client-local here; POSIX record locks
+            # were verified to exclude writers on different compute nodes.
+            fcntl.lockf(lock, fcntl.LOCK_EX)
             try:
                 state = json.loads(self.path.read_text()) if self.path.exists() else {
                     'schema': 1, 'scratch': str(self.scratch), 'stores': {},
@@ -102,7 +104,7 @@ class ActualInputBudget:
                 state['accounting_updated_at'] = time.time()
                 _atomic(self.path, state)
             finally:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+                fcntl.lockf(lock, fcntl.LOCK_UN)
 
     def _store(self, path):
         # Resolve only after checking each ancestor for symlinks. Otherwise a

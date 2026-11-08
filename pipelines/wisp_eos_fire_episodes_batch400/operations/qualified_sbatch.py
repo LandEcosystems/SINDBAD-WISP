@@ -22,7 +22,7 @@ def job_name(args):
     return ''
 
 
-def restricted_args(args, policy, cluster_nodes):
+def restricted_args(args, policy, cluster_nodes, partition_hosts=None):
     name = job_name(args)
     if not name.startswith('w4e-') or name in {'w4e-gpu', 'w4e-control'}:
         return list(args)
@@ -48,6 +48,30 @@ def restricted_args(args, policy, cluster_nodes):
         else:
             remaining.append(arg)
         i += 1
+    if partition_hosts is not None:
+        # A partition with no qualified hosts can leave a multi-partition job
+        # marked BadConstraints even when another requested partition is valid.
+        rewritten = []
+        i = 0
+        while i < len(remaining):
+            arg = remaining[i]
+            if arg.startswith('--partition=') or arg in ('--partition', '-p'):
+                if '=' in arg:
+                    requested = arg.split('=', 1)[1]
+                else:
+                    i += 1
+                    if i == len(remaining):
+                        raise ValueError('Missing partition argument')
+                    requested = remaining[i]
+                keep = [part for part in requested.split(',')
+                        if set(partition_hosts.get(part, ())) & allowed & current]
+                if not keep:
+                    raise ValueError('No requested partition contains a qualified CPU host')
+                rewritten.append('--partition=' + ','.join(keep))
+            else:
+                rewritten.append(arg)
+            i += 1
+        remaining = rewritten
     expression = ','.join(excluded + extra)
     return (['--exclude=' + expression] if expression else []) + remaining
 
@@ -58,11 +82,16 @@ def main():
     if name.startswith('w4e-') and name not in {'w4e-gpu', 'w4e-control'}:
         policy_path = Path(__file__).resolve().parent.parent / 'node_policy.json'
         policy = json.loads(policy_path.read_text())
-        result = subprocess.run(['/usr/bin/sinfo', '-N', '-h', '-o', '%N'],
+        result = subprocess.run(['/usr/bin/sinfo', '-N', '-h', '-o', '%N|%P'],
                                 check=True, universal_newlines=True,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 timeout=30)
-        args = restricted_args(args, policy, result.stdout.split())
+        nodes, partitions = set(), {}
+        for line in result.stdout.splitlines():
+            host, partition = line.split('|')
+            nodes.add(host)
+            partitions.setdefault(partition.rstrip('*'), set()).add(host)
+        args = restricted_args(args, policy, nodes, partitions)
     os.execv('/usr/bin/sbatch', ['/usr/bin/sbatch'] + args)
 
 

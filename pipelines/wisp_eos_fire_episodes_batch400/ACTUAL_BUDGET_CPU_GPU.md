@@ -112,3 +112,24 @@ The runtime API is
 It returns the reusable model and completed task count, and returns promptly
 when no eligible prediction task is available. The campaign controller holds
 the shared regional prediction-reader lock while invoking it.
+
+## Cross-node locking and recovery (2026-11-08)
+
+A two-node probe on the production CVFS filesystem found that `flock` did not
+exclude a second client, while POSIX `lockf` did. The global byte ledger and
+regional prediction-reader/cleanup locks now use `lockf`, matching the existing
+queue and task locks. Changing lock families requires checkpointing every
+worker and holding pending jobs; mixed old/new lock families are unsafe.
+
+For the observed incident, `operations/repair_budget_journal.py` reconstructs
+missing budget registrations only from durable queue leases whose Slurm owners
+are confirmed terminal, with task locks held. It refuses conflicting owners,
+keeps before-state backups, uses normal byte settlement and queue recovery, and
+then performs one quiescent full disk audit. It does not mark tensor or model
+output files successful. Existing per-date checksums determine what resumes.
+
+The qualified-host sbatch wrapper also filters out requested partitions that
+contain no qualified host. At this deployment that removes `gpu` from numerical
+CPU jobs, while keeping `work,small`; A100 jobs remain on `gpu`. Qualification
+checks remain enabled. A partition is automatically retained if it later gains
+a qualified host. Resource/priority waits can still occur after this correction.

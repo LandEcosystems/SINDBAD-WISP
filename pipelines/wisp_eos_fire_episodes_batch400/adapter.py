@@ -54,9 +54,9 @@ def prediction_reader(c):
     path=Path(c['root'])/'locks/prediction_readers.lock'
     path.parent.mkdir(parents=True,exist_ok=True)
     with path.open('a+') as handle:
-        fcntl.flock(handle.fileno(),fcntl.LOCK_SH)
+        fcntl.lockf(handle.fileno(),fcntl.LOCK_SH)
         try:yield
-        finally:fcntl.flock(handle.fileno(),fcntl.LOCK_UN)
+        finally:fcntl.lockf(handle.fileno(),fcntl.LOCK_UN)
 
 
 def _inside(path, parent):
